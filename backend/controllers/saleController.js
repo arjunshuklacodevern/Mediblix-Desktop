@@ -5,7 +5,8 @@ import { getTenantContext } from "../utils/tenantHelper.js";
 const { saleRepository, organizationRepository } = repositories;
 
 const createSale = async (req, res) => {
-  const { customerId, items, paymentMethod, invoiceNumber } = req.body;
+  const { customerId, customer, items, paymentMethod, invoiceNumber } = req.body;
+  const targetCustomerId = customerId || customer;
 
   try {
     const orgId = await getTenantContext(req);
@@ -16,7 +17,7 @@ const createSale = async (req, res) => {
 
     const sale = saleRepository.createSale({
       orgId,
-      customerId,
+      customerId: targetCustomerId,
       items,
       paymentMethod,
       invoiceNumber,
