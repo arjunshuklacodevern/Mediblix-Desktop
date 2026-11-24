@@ -1,0 +1,75 @@
+{
+  "name": "mediblix-desktop",
+  "version": "1.0.0",
+  "description": "Mediblix Pharmacy Management System — Desktop Application",
+  "main": "electron/main.js",
+  "author": "Mediblix",
+  "license": "ISC",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:admin": "npm run dev --prefix admin-frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:admin": "npm run build --prefix admin-frontend",
+    "build:all": "npm run build:frontend && npm run build:admin",
+    "electron:dev": "node electron/runner.js .",
+    "electron:prod": "node electron/runner.js . --production",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:admin\" \"wait-on http-get://localhost:5173 http-get://localhost:5174 && npm run electron:dev\"",
+    "start": "npm run build:all && npm run electron:prod",
+    "test:db": "node database/tests/test_database.js && node database/tests/test_repositories.js",
+    "test:api": "node backend/tests/test_auth_and_products.js",
+    "test:pos": "node backend/tests/test_customers_and_sales.js",
+    "test:orders": "node backend/tests/test_suppliers_and_orders.js",
+    "test:admin": "node backend/tests/test_admin_and_ai.js",
+    "test": "npm run test:db && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin",
+    "pack": "npm run build:all && electron-builder --dir",
+    "dist": "npm run build:all && electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.mediblix.desktop",
+    "productName": "Mediblix",
+    "copyright": "Copyright © 2026 Mediblix",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "admin-frontend/dist/**/*",
+      "database/**/*",
+      "!**/node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "frontend/dist",
+        "to": "frontend-dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "admin-frontend/dist",
+        "to": "admin-dist",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    }
+  }
+}

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:;" />
+  <title>Mediblix — Select Portal</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f0fdf4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: #1a1a1a;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .logo-section {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .logo-section img {
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+      margin-bottom: 12px;
+    }
+
+    .logo-section h1 {
+      font-size: 28px;
+      font-weight: 800;
+      color: #166534;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-section p {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .portal-cards {
+      display: flex;
+      gap: 20px;
+      -webkit-app-region: no-drag;
+    }
+
+    .portal-card {
+      width: 220px;
+      padding: 28px 20px;
+      background: #ffffff;
+      border: 2px solid #e5e7eb;
+      border-radius: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .portal-card:hover {
+      border-color: #166534;
+      box-shadow: 0 8px 25px rgba(22, 101, 52, 0.12);
+      transform: translateY(-2px);
+    }
+
+    .portal-card:active {
+      transform: translateY(0);
+    }
+
+    .portal-card .icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 24px;
+    }
+
+    .portal-card.pharmacy .icon {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .portal-card.admin .icon {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .portal-card h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #1a1a1a;
+    }
+
+    .portal-card p {
+      font-size: 12px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+
+    .version-tag {
+      position: fixed;
+      bottom: 14px;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo-section">
+    <img src="Mediblix-logo.png" alt="Mediblix Logo" />
+    <h1>Mediblix</h1>
+    <p>Pharmacy Management System</p>
+  </div>
+
+  <div class="portal-cards">
+    <div class="portal-card pharmacy" id="btn-pharmacy">
+      <div class="icon">💊</div>
+      <h3>Pharmacy Staff</h3>
+      <p>Inventory, billing, customers, suppliers & stock management</p>
+    </div>
+
+    <div class="portal-card admin" id="btn-admin">
+      <div class="icon">🛡️</div>
+      <h3>Super Admin</h3>
+      <p>Organizations, subscriptions & system administration</p>
+    </div>
+  </div>
+
+  <div class="version-tag">v1.0.0</div>
+
+  <script>
+    document.getElementById('btn-pharmacy').addEventListener('click', () => {
+      window.electronAPI.openPharmacyPortal();
+    });
+
+    document.getElementById('btn-admin').addEventListener('click', () => {
+      window.electronAPI.openAdminPortal();
+    });
+  </script>
+</body>
+</html>
