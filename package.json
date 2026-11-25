@@ -44,9 +44,15 @@
     },
     "files": [
       "electron/**/*",
-      "frontend/dist/**/*",
-      "admin-frontend/dist/**/*",
+      "!electron/audit_reports/**",
+      "!electron/tests/**",
+      "!electron/run_comprehensive_audit.js",
+      "!electron/test_safe_dev_gui.js",
       "database/**/*",
+      "!database/tests/**",
+      "!**/*.db*",
+      "!**/*.log",
+      "!**/.env*",
       "!**/node_modules/**"
     ],
     "extraResources": [
@@ -61,7 +67,8 @@
           "**/*",
           "!tests/**",
           "!**/*.db*",
-          "!**/*.log"
+          "!**/*.log",
+          "!**/.env*"
         ]
       },
       {
@@ -71,7 +78,8 @@
           "**/*",
           "!tests/**",
           "!**/*.db*",
-          "!**/*.log"
+          "!**/*.log",
+          "!**/.env*"
         ]
       },
       {

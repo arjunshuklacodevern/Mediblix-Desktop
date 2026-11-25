@@ -37,7 +37,7 @@ try {
 }
 
 const { CURRENT_SCHEMA_VERSION, MIGRATIONS } = require('./schema');
-const { getCanonicalDbPath, ensureDbDirExists, getCanonicalDbDir } = require('./paths');
+const { getCanonicalDbPath, ensureDbDirExists, getCanonicalDbDir, getInitialCredentialsPath } = require('./paths');
 
 let dbInstance = null;
 
@@ -113,12 +113,18 @@ function seedDefaults(db) {
     console.log('[DB] Seeded master organization:', defaultOrg.name);
   }
 
-  // 2. Seed Default Super Admin User (using environment variables, no hardcoded secrets)
+  // 2. Seed Default Super Admin User (using environment variables, or unique generated credentials)
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@mediblix.local').toLowerCase().trim();
-  const adminPassword = process.env.ADMIN_PASSWORD || crypto.randomBytes(16).toString('hex');
+  let adminPassword = process.env.ADMIN_PASSWORD;
+  let isNewProvision = false;
 
-  let superadmin = db.prepare('SELECT * FROM users WHERE email = ?').get(adminEmail);
+  let superadmin = db.prepare('SELECT * FROM users WHERE role = ?').get('superadmin') ||
+                   db.prepare('SELECT * FROM users WHERE email = ?').get(adminEmail);
   if (!superadmin) {
+    if (!adminPassword) {
+      isNewProvision = true;
+      adminPassword = crypto.randomBytes(9).toString('base64url'); // 12-char secure unique random password
+    }
     const salt = bcrypt.genSaltSync(10);
     const hash = bcrypt.hashSync(adminPassword, salt);
     const userId = generateId();
@@ -137,6 +143,32 @@ function seedDefaults(db) {
       1
     );
     console.log('[DB] Seeded initial superadmin:', adminEmail);
+
+    if (isNewProvision) {
+      try {
+        const credPath = getInitialCredentialsPath();
+        const content = [
+          '===================================================================',
+          'Mediblix Desktop — Initial Super Admin Credentials',
+          '===================================================================',
+          'A unique, secure administrator account was provisioned for this system.',
+          '',
+          `Email:    ${adminEmail}`,
+          `Password: ${adminPassword}`,
+          '',
+          'SECURITY NOTICE:',
+          '- These one-time credentials were generated on first launch.',
+          '- Please log in to the Super Admin Portal and update your password.',
+          '- Once noted down, securely delete this file.',
+          '===================================================================',
+          ''
+        ].join('\r\n');
+        fs.writeFileSync(credPath, content, { encoding: 'utf8' });
+        console.log('[DB] Secure initial credentials file written to:', credPath);
+      } catch (fileErr) {
+        console.error('[DB] Failed to write initial credentials file:', fileErr.message);
+      }
+    }
   }
 
   // 3. Seed Default Suppliers if none exist

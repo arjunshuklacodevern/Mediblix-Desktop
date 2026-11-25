@@ -25,6 +25,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { getOrCreateJwtSecret } = require('../database/paths');
 
 const DEFAULT_PORT = 5001;
 const DEFAULT_STARTUP_TIMEOUT_MS = 15000;
@@ -242,7 +243,8 @@ async function startBackend(options = {}) {
       env: {
         ...process.env,
         PORT: String(port),
-        NODE_ENV: isDev ? 'development' : 'production'
+        NODE_ENV: isDev ? 'development' : 'production',
+        JWT_SECRET: getOrCreateJwtSecret()
       },
       stdio: 'pipe',
     });

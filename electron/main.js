@@ -7,6 +7,7 @@
 
 const { app, BrowserWindow, ipcMain, Menu, shell, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const url = require('url');
 const net = require('net');
 const http = require('http');
@@ -20,7 +21,7 @@ const {
   isSpawnedByElectron,
   getBackendChild
 } = require('./backend-supervisor');
-const { getCanonicalDbPath } = require('../database/paths');
+const { getCanonicalDbPath, getInitialCredentialsPath } = require('../database/paths');
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 const IS_DEV = !app.isPackaged && !process.argv.includes('--production');
@@ -294,6 +295,34 @@ function setupIPC() {
   });
 }
 
+function checkAndNotifyFirstRunCredentials() {
+  try {
+    const credPath = getInitialCredentialsPath();
+    if (fs.existsSync(credPath)) {
+      const content = fs.readFileSync(credPath, 'utf8');
+      const passMatch = content.match(/Password:\s*([^\r\n]+)/);
+      const emailMatch = content.match(/Email:\s*([^\r\n]+)/);
+      if (passMatch && emailMatch) {
+        dialog.showMessageBoxSync({
+          type: 'info',
+          title: 'Mediblix — Administrator Account',
+          message: 'Initial Administrator Account Generated',
+          detail: [
+            'A unique administrator account has been created for your installation:\n',
+            `Email:    ${emailMatch[1]}`,
+            `Password: ${passMatch[1]}\n`,
+            `These credentials are saved at:\n${credPath}\n`,
+            'Please log in to the Super Admin portal and update your password.'
+          ].join('\n'),
+          buttons: ['OK']
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Electron] Credential notification error:', err.message);
+  }
+}
+
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   createAppMenu();
@@ -301,6 +330,7 @@ app.whenReady().then(async () => {
 
   try {
     await startBackend();
+    checkAndNotifyFirstRunCredentials();
     createPortalWindow();
   } catch (err) {
     console.error('[Electron] Fatal startup error:', err);

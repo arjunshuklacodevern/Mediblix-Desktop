@@ -34,8 +34,43 @@ function ensureDbDirExists(dbPath = getCanonicalDbPath()) {
   return dir;
 }
 
+function getInitialCredentialsPath() {
+  return path.join(getCanonicalDbDir(), 'INITIAL_ADMIN_CREDENTIALS.txt');
+}
+
+function getOrCreateJwtSecret() {
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length > 0) {
+    return process.env.JWT_SECRET.trim();
+  }
+
+  const crypto = require('crypto');
+  const secretDir = getCanonicalDbDir();
+  ensureDbDirExists(path.join(secretDir, 'dummy.txt'));
+  const secretPath = path.join(secretDir, '.jwt_secret');
+
+  if (fs.existsSync(secretPath)) {
+    try {
+      const stored = fs.readFileSync(secretPath, 'utf8').trim();
+      if (stored.length >= 32) {
+        return stored;
+      }
+    } catch (_) {}
+  }
+
+  // Generate unique, non-predictable 256-bit cryptographic key
+  const newSecret = crypto.randomBytes(32).toString('hex');
+  try {
+    fs.writeFileSync(secretPath, newSecret, { encoding: 'utf8' });
+  } catch (err) {
+    console.error('[Security] Warning: Could not write persistent JWT secret file:', err.message);
+  }
+  return newSecret;
+}
+
 module.exports = {
   getCanonicalDbDir,
   getCanonicalDbPath,
-  ensureDbDirExists
+  ensureDbDirExists,
+  getInitialCredentialsPath,
+  getOrCreateJwtSecret
 };
