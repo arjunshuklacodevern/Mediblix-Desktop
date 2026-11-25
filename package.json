@@ -21,7 +21,9 @@
     "test:pos": "node backend/tests/test_customers_and_sales.js",
     "test:orders": "node backend/tests/test_suppliers_and_orders.js",
     "test:admin": "node backend/tests/test_admin_and_ai.js",
-    "test": "npm run test:db && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin",
+    "test:offline": "node backend/tests/test_offline_and_mongo_removal.js",
+    "test:supervisor": "node electron/tests/test_backend_supervisor.js",
+    "test": "npm run test:db && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin && npm run test:offline && npm run test:supervisor",
     "pack": "npm run build:all && electron-builder --dir",
     "dist": "npm run build:all && electron-builder",
     "postinstall": "electron-builder install-app-deps"
@@ -42,12 +44,44 @@
     },
     "files": [
       "electron/**/*",
-      "frontend/dist/**/*",
-      "admin-frontend/dist/**/*",
+      "!electron/audit_reports/**",
+      "!electron/tests/**",
+      "!electron/run_comprehensive_audit.js",
+      "!electron/test_safe_dev_gui.js",
       "database/**/*",
+      "!database/tests/**",
+      "!**/*.db*",
+      "!**/*.log",
+      "!**/.env*",
       "!**/node_modules/**"
     ],
     "extraResources": [
+      {
+        "from": "build/bin/node.exe",
+        "to": "bin/node.exe"
+      },
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!tests/**",
+          "!**/*.db*",
+          "!**/*.log",
+          "!**/.env*"
+        ]
+      },
+      {
+        "from": "database",
+        "to": "database",
+        "filter": [
+          "**/*",
+          "!tests/**",
+          "!**/*.db*",
+          "!**/*.log",
+          "!**/.env*"
+        ]
+      },
       {
         "from": "frontend/dist",
         "to": "frontend-dist",

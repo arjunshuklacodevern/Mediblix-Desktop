@@ -4,8 +4,8 @@ import { Mail, Lock, Loader2, ShieldCheck, ShieldAlert, ArrowRight, Eye, EyeOff 
 import { useAdminAuth } from "../context/AdminAuthStates";
 
 const AdminLogin = () => {
-  const [email, setEmail] = useState("adarshrpandey10@gmail.com");
-  const [password, setPassword] = useState("Admin@Mediblix2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState(null);
@@ -70,7 +70,7 @@ const AdminLogin = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="adarshrpandey10@gmail.com"
+                  placeholder="admin@mediblix.local"
                   className="w-full pl-10 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-green-500/5 focus:border-green-600 transition-all placeholder:text-gray-300 shadow-sm"
                   required
                 />

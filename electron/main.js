@@ -7,12 +7,56 @@
 
 const { app, BrowserWindow, ipcMain, Menu, shell, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const url = require('url');
+const net = require('net');
+const http = require('http');
+const { spawn } = require('child_process');
+
+const {
+  DEFAULT_PORT,
+  startBackend: supervisorStartBackend,
+  stopBackend: supervisorStopBackend,
+  resolveNodeBinary,
+  isSpawnedByElectron,
+  getBackendChild
+} = require('./backend-supervisor');
+const { getCanonicalDbPath, getInitialCredentialsPath } = require('../database/paths');
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 const IS_DEV = !app.isPackaged && !process.argv.includes('--production');
 const FRONTEND_DEV_URL = 'http://localhost:5173';
 const ADMIN_DEV_URL    = 'http://localhost:5174';
+
+// ─── Canonical Database Path (%APPDATA%/Mediblix/mediblix.db) ─────────────────
+const DB_PATH = getCanonicalDbPath();
+
+let isQuitting = false;
+
+// ─── Backend Process Management ─────────────────────────────────────────────
+async function startBackend() {
+  const backendScript = app.isPackaged
+    ? path.join(process.resourcesPath, 'backend', 'index.js')
+    : path.join(__dirname, '..', 'backend', 'index.js');
+
+  const backendCwd = app.isPackaged
+    ? path.join(process.resourcesPath, 'backend')
+    : path.join(__dirname, '..', 'backend');
+
+  const nodeBin = resolveNodeBinary(app.isPackaged ? process.resourcesPath : null);
+
+  return supervisorStartBackend({
+    port: DEFAULT_PORT,
+    backendScript,
+    backendCwd,
+    nodeBin,
+    isDev: IS_DEV
+  });
+}
+
+function stopBackend(timeoutMs) {
+  return supervisorStopBackend(timeoutMs);
+}
 
 // Paths to built frontend assets
 const FRONTEND_DIST = IS_DEV
@@ -27,9 +71,6 @@ const ADMIN_DIST = IS_DEV
       app.isPackaged ? process.resourcesPath : __dirname,
       app.isPackaged ? 'admin-dist' : '../admin-frontend/dist'
     );
-
-// ─── Database path (for future SQLite integration) ───────────────────────────
-const DB_PATH = path.join(app.getPath('userData'), 'mediblix.db');
 
 // ─── Window references ──────────────────────────────────────────────────────
 let portalWindow = null;   // Portal selection window
@@ -254,11 +295,55 @@ function setupIPC() {
   });
 }
 
+function checkAndNotifyFirstRunCredentials() {
+  try {
+    const credPath = getInitialCredentialsPath();
+    if (fs.existsSync(credPath)) {
+      const content = fs.readFileSync(credPath, 'utf8');
+      const passMatch = content.match(/Password:\s*([^\r\n]+)/);
+      const emailMatch = content.match(/Email:\s*([^\r\n]+)/);
+      if (passMatch && emailMatch) {
+        dialog.showMessageBoxSync({
+          type: 'info',
+          title: 'Mediblix — Administrator Account',
+          message: 'Initial Administrator Account Generated',
+          detail: [
+            'A unique administrator account has been created for your installation:\n',
+            `Email:    ${emailMatch[1]}`,
+            `Password: ${passMatch[1]}\n`,
+            `These credentials are saved at:\n${credPath}\n`,
+            'Please log in to the Super Admin portal and update your password.'
+          ].join('\n'),
+          buttons: ['OK']
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Electron] Credential notification error:', err.message);
+  }
+}
+
 // ─── App lifecycle ──────────────────────────────────────────────────────────
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createAppMenu();
   setupIPC();
-  createPortalWindow();
+
+  try {
+    await startBackend();
+    checkAndNotifyFirstRunCredentials();
+    createPortalWindow();
+  } catch (err) {
+    console.error('[Electron] Fatal startup error:', err);
+    try {
+      await stopBackend(SHUTDOWN_TIMEOUT_MS);
+    } catch {}
+    dialog.showErrorBox(
+      'Mediblix Startup Failed',
+      `${err.message || err}\n\nThe application will now close.`
+    );
+    app.quit();
+    return;
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -267,8 +352,24 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
+  await stopBackend();
   app.quit();
+});
+
+app.on('before-quit', async (e) => {
+  if (isQuitting) return;
+  if (getBackendChild() && isSpawnedByElectron()) {
+    e.preventDefault();
+    isQuitting = true;
+    console.log('[Electron] before-quit: Waiting for graceful backend shutdown...');
+    await stopBackend();
+    app.quit();
+  }
+});
+
+app.on('will-quit', async () => {
+  await stopBackend();
 });
 
 // Security: Prevent new windows from being opened via links

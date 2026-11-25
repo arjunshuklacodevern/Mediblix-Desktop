@@ -1,0 +1,183 @@
+[
+  {
+    "timestamp": "2026-11-24T21:20:10.385Z",
+    "module": "Backend Supervisor",
+    "testCase": "Backend Process Startup & Port Binding",
+    "expectedResult": "Backend spawns on port 5001 with active PID and health 200",
+    "actualResult": "Backend started on port 5001 with healthy status",
+    "status": "PASS",
+    "evidence": "Health status confirmed via supervisor"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:11.792Z",
+    "module": "Portal Selector",
+    "testCase": "Portal Selection UI Render & Title",
+    "expectedResult": "Title \"Mediblix — Select Portal\" with Pharmacy and Admin portal buttons",
+    "actualResult": "Title: \"Mediblix — Select Portal\", hasStaffButton: true, hasAdminButton: true, Console Errors: 0",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/portal_selection_window.png",
+    "errorDetails": ""
+  },
+  {
+    "timestamp": "2026-11-24T21:20:14.212Z",
+    "module": "Super Admin Portal",
+    "testCase": "Super Admin Login Page Initial Render",
+    "expectedResult": "Admin login page renders with root container",
+    "actualResult": "Rendered root: true, Title: \"Mediblix Admin Portal\"",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/admin_login_page.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:15.838Z",
+    "module": "Super Admin Portal",
+    "testCase": "Authentication with Invalid Password (Negative)",
+    "expectedResult": "Rejects invalid login, displays error message, retains login screen, and creates no token",
+    "actualResult": "Rejected: true, Has Token: false, On Login Page: true",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/admin_login_negative.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:20.253Z",
+    "module": "Super Admin Portal",
+    "testCase": "Super Admin Login & Dashboard Access (Positive)",
+    "expectedResult": "Login succeeds, token stored, redirected to Dashboard/Organizations",
+    "actualResult": "Dashboard rendered successfully; organization count: Not captured; active tenancies: Not captured.",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/admin_dashboard.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:20.342Z",
+    "module": "Super Admin Portal",
+    "testCase": "Pharmacy Staff Provisioning Flow (Organization + Org Admin)",
+    "expectedResult": "Super Admin creates organization with initial admin password",
+    "actualResult": "HTTP Status: 201, Org ID: 14f5cbd09fdc927027029029, Provisioning: Success",
+    "status": "PASS",
+    "evidence": "{\"status\":201,\"organizationId\":\"14f5cbd09fdc927027029029\",\"provisioningSuccess\":true}"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:22.917Z",
+    "module": "Pharmacy Staff Portal",
+    "testCase": "Pharmacy Staff Login Page Initial Render",
+    "expectedResult": "Renders login page with #root and title \"Mediblix — Pharmacy Management System\"",
+    "actualResult": "Title: \"Mediblix — Pharmacy Management System\", HasRoot: true",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_login_page.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:23.316Z",
+    "module": "Pharmacy Staff Portal",
+    "testCase": "Authorized Pharmacy Staff Login Flow",
+    "expectedResult": "Staff logs in, receives valid JWT token and is directed into main pharmacy layout",
+    "actualResult": "Has Valid Token: true, URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/, Authenticated: true",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_authenticated_home.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:24.964Z",
+    "module": "Staff Navigation: Dashboard",
+    "testCase": "Navigate to #/dashboard & Render Components",
+    "expectedResult": "Renders Dashboard view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/dashboard, Buttons: 2, Tables: 0, Inputs: 0",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_dashboard.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:26.572Z",
+    "module": "Staff Navigation: Inventory",
+    "testCase": "Navigate to #/inventory & Render Components",
+    "expectedResult": "Renders Inventory view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/inventory, Buttons: 13, Tables: 1, Inputs: 1",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_inventory.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:28.198Z",
+    "module": "Staff Navigation: Stock / POS",
+    "testCase": "Navigate to #/stock & Render Components",
+    "expectedResult": "Renders Stock / POS view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/stock, Buttons: 8, Tables: 0, Inputs: 0",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_stock_pos.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:29.824Z",
+    "module": "Staff Navigation: Orders",
+    "testCase": "Navigate to #/orders & Render Components",
+    "expectedResult": "Renders Orders view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/orders, Buttons: 9, Tables: 0, Inputs: 1",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_orders.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:31.442Z",
+    "module": "Staff Navigation: Customers",
+    "testCase": "Navigate to #/customers & Render Components",
+    "expectedResult": "Renders Customers view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/customers, Buttons: 1, Tables: 0, Inputs: 1",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_customers.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:33.071Z",
+    "module": "Staff Navigation: Suppliers",
+    "testCase": "Navigate to #/suppliers & Render Components",
+    "expectedResult": "Renders Suppliers view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/suppliers, Buttons: 3, Tables: 0, Inputs: 1",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_suppliers.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:34.665Z",
+    "module": "Staff Navigation: Audits",
+    "testCase": "Navigate to #/audits & Render Components",
+    "expectedResult": "Renders Audits view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/audits, Buttons: 24, Tables: 0, Inputs: 10",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_audits.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:36.266Z",
+    "module": "Staff Navigation: AI Import",
+    "testCase": "Navigate to #/ai-import & Render Components",
+    "expectedResult": "Renders AI Import view with UI controls without fatal errors",
+    "actualResult": "URL: file:///C:/Users/iamar/Mediblix-Desktop/frontend/dist/index.html#/ai-import, Buttons: 4, Tables: 0, Inputs: 1",
+    "status": "PASS",
+    "screenshot": "electron/audit_reports/screenshots/staff_ai_import.png"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:36.287Z",
+    "module": "Pharmacy Staff Operations",
+    "testCase": "Product Creation -> Customer Creation -> POS Sale -> Atomic Stock Decrement",
+    "expectedResult": "Stock decrements from 100 to 95 atomically on POS sale checkout (initialQty === 100 && finalQty === 95)",
+    "actualResult": "Initial: 100, Final: 95, Decrement Verified: true, Sale: Rs. 127.5",
+    "status": "PASS",
+    "errorDetails": null
+  },
+  {
+    "timestamp": "2026-11-24T21:20:36.287Z",
+    "module": "Offline Readiness",
+    "testCase": "Local Core Pharmacy Operations (POS, Inventory, Billing, Suppliers)",
+    "expectedResult": "100% Offline via local Express + SQLite runtime",
+    "actualResult": "Operates completely locally over 127.0.0.1:5001 with WAL mode SQLite",
+    "status": "PASS",
+    "evidence": "Zero remote database connection attempts"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:36.287Z",
+    "module": "External Network Dependencies",
+    "testCase": "Identify Features Requiring Cloud/Internet Access",
+    "expectedResult": "Catalog features that call external services",
+    "actualResult": "1. Gemini AI Invoice Parsing (/api/ai/parse-invoice calls generativelanguage.googleapis.com). 2. MedAgent LLM alternatives/interaction (/api/medagent calls Gemini API). 3. User avatar in Settings.jsx (randomuser.me). All other core pharmacy functions operate 100% offline.",
+    "status": "PASS",
+    "evidence": "Codebase audit of controllers and frontends"
+  },
+  {
+    "timestamp": "2026-11-24T21:20:36.287Z",
+    "module": "Database Architecture Audit",
+    "testCase": "Verify Absence of MongoDB/Mongoose Runtime Dependencies",
+    "expectedResult": "Zero active MongoDB/Mongoose imports, drivers, or queries",
+    "actualResult": "Mongoose package uninstalled. Models replaced with SQLite DAO deprecation proxies. SQLite initDatabase() executes synchronously.",
+    "status": "PASS",
+    "evidence": "git grep confirmed 0 active mongoose usages"
+  }
+]

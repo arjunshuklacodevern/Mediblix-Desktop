@@ -1,13 +1,14 @@
-import mongoose from "mongoose";
+/**
+ * Mediblix Desktop — Database Connection Layer
+ *
+ * @deprecated MongoDB / Mongoose has been deprecated and decommissioned.
+ * Mediblix Desktop operates strictly on local SQLite via database/db.js.
+ * This stub is maintained to prevent broken imports if any legacy script references it.
+ */
 
 const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
-  }
+  console.log("[DB] Notice: MongoDB is decommissioned. Mediblix Desktop operates strictly on local SQLite.");
+  return Promise.resolve();
 };
 
 export default connectDB;
