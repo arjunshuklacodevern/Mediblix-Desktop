@@ -192,8 +192,14 @@ async function runSupervisorTests() {
   console.log("\n[Test 6: Bounded Forced Shutdown (SIGKILL Fallback)]");
   resetSupervisorState();
 
-  // Child process that ignores SIGTERM
-  const stubbornChild = spawn(nodeBin, ['-e', 'process.on("SIGTERM", () => {/* ignore */}); setInterval(() => {}, 1000);'], { stdio: 'pipe' });
+  // Child process that ignores SIGTERM — wait until handler is registered before stopping
+  const stubbornChild = spawn(nodeBin, ['-e', 'process.on("SIGTERM", () => {/* ignore */}); console.log("READY"); setInterval(() => {}, 1000);'], { stdio: 'pipe' });
+  await new Promise((resolve) => {
+    stubbornChild.stdout.on('data', (chunk) => {
+      if (chunk.toString().includes('READY')) resolve();
+    });
+    setTimeout(resolve, 1000);
+  });
   setOwnedChildForTesting(stubbornChild);
   const stubbornPid = stubbornChild.pid;
 

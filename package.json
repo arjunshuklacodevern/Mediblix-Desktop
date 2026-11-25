@@ -22,8 +22,9 @@
     "test:orders": "node backend/tests/test_suppliers_and_orders.js",
     "test:admin": "node backend/tests/test_admin_and_ai.js",
     "test:offline": "node backend/tests/test_offline_and_mongo_removal.js",
+    "test:hybrid-ai": "node backend/tests/test_hybrid_ai.js",
     "test:supervisor": "node electron/tests/test_backend_supervisor.js",
-    "test": "npm run test:db && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin && npm run test:offline && npm run test:supervisor",
+    "test": "npm run test:db && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin && npm run test:hybrid-ai && npm run test:offline && npm run test:supervisor",
     "pack": "npm run build:all && electron-builder --dir",
     "dist": "npm run build:all && electron-builder",
     "postinstall": "electron-builder install-app-deps"

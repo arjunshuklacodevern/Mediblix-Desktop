@@ -43,6 +43,15 @@ const Billing = () => {
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'new-bill');
 
   useEffect(() => {
+    if (activeTab === 'new-bill') {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (activeTab === 'history' || activeTab === 'returns') {
       if (customer) {
         fetchCustomerBills(customer._id);
@@ -1240,6 +1249,14 @@ const Billing = () => {
                       onChange={(e) => {
                         setProductSearch(e.target.value);
                         setShowSuggestions(true);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && productSearch.trim() && filteredProducts.length > 0) {
+                          e.preventDefault();
+                          const query = productSearch.trim().toLowerCase();
+                          const exactSku = filteredProducts.find((p) => (p.sku || '').toLowerCase() === query);
+                          addToCart(exactSku || filteredProducts[0]);
+                        }
                       }}
                       onFocus={() => productSearch.length > 0 && setShowSuggestions(true)}
                       className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-[var(--border-soft)] rounded-md focus:outline-none focus:border-[var(--accent)] focus:bg-white transition-all text-sm"
