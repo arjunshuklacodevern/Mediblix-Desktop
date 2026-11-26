@@ -2,9 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/Mediblix-logo.png" />
+    <link rel="icon" type="image/png" href="./Mediblix-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mediblix Admin Portal</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('mediblix_theme_preference');
+          if (t === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body class="bg-gray-50 text-gray-900 antialiased">
     <div id="root"></div>

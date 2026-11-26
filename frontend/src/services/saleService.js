@@ -17,8 +17,19 @@ const generateInvoice = async (saleId) => {
   return response.data;
 };
 
-const processReturn = async (saleId, itemId, returnQuantity) => {
-  const response = await api.post(`/sales/${saleId}/return`, { itemId, returnQuantity });
+const processReturn = async (saleId, payload, legacyQty) => {
+  let body;
+  if (typeof payload === 'object' && payload !== null) {
+    body = payload;
+  } else {
+    body = { itemId: payload, returnQuantity: legacyQty };
+  }
+  const response = await api.post(`/sales/${saleId}/return`, body);
+  return response.data;
+};
+
+const modifyInvoice = async (saleId, modifyData) => {
+  const response = await api.put(`/sales/${saleId}/modify`, modifyData);
   return response.data;
 };
 
@@ -27,4 +38,5 @@ export default {
   getSales,
   generateInvoice,
   processReturn,
+  modifyInvoice,
 };

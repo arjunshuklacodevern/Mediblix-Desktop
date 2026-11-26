@@ -64,9 +64,15 @@ async function runTests() {
     // TEST 2: Schema Migrations
     // ------------------------------------------------------------------------
     console.log('\n[TEST 2] Verifying schema migrations...');
-    const applied = db.prepare('SELECT * FROM schema_migrations WHERE version = ?').get(CURRENT_SCHEMA_VERSION);
-    assert(applied && applied.name === '001_initial_schema', 'Migration 001_initial_schema not recorded in schema_migrations');
-    console.log(`  ✓ Migration v${CURRENT_SCHEMA_VERSION} recorded: ${applied.name}`);
+    const appliedV1 = db.prepare('SELECT * FROM schema_migrations WHERE version = 1').get();
+    assert(appliedV1 && appliedV1.name === '001_initial_schema', 'Migration 001_initial_schema not recorded in schema_migrations');
+    console.log(`  ✓ Migration v1 recorded: ${appliedV1.name}`);
+    const appliedV2 = db.prepare('SELECT * FROM schema_migrations WHERE version = 2').get();
+    assert(appliedV2 && appliedV2.name === '002_bidirectional_sync_tracking', 'Migration 002_bidirectional_sync_tracking not recorded');
+    console.log(`  ✓ Migration v2 recorded: ${appliedV2.name}`);
+    const appliedCurrent = db.prepare('SELECT * FROM schema_migrations WHERE version = ?').get(CURRENT_SCHEMA_VERSION);
+    assert(appliedCurrent, `Migration v${CURRENT_SCHEMA_VERSION} not recorded`);
+    console.log(`  ✓ Migration v${CURRENT_SCHEMA_VERSION} recorded: ${appliedCurrent.name}`);
 
     // ------------------------------------------------------------------------
     // TEST 3: Baseline Seeding

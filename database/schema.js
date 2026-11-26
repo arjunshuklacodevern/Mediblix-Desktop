@@ -20,7 +20,7 @@
  *  - Dedicated schema_migrations table for safe incremental migrations.
  */
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const MIGRATIONS = [
   {
@@ -229,6 +229,129 @@ const MIGRATIONS = [
       );
 
       CREATE INDEX IF NOT EXISTS idx_import_history_org ON import_history(organization_id);
+    `
+  },
+  {
+    version: 2,
+    name: "002_bidirectional_sync_tracking",
+    up: `
+      -- 1. Sync Tracking Columns on Business Entities
+      -- products
+      ALTER TABLE products ADD COLUMN sync_status TEXT DEFAULT 'pending' CHECK(sync_status IN ('pending', 'synced'));
+      ALTER TABLE products ADD COLUMN synced_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_products_sync ON products(sync_status);
+
+      -- customers
+      ALTER TABLE customers ADD COLUMN sync_status TEXT DEFAULT 'pending' CHECK(sync_status IN ('pending', 'synced'));
+      ALTER TABLE customers ADD COLUMN synced_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_customers_sync ON customers(sync_status);
+
+      -- sales
+      ALTER TABLE sales ADD COLUMN sync_status TEXT DEFAULT 'pending' CHECK(sync_status IN ('pending', 'synced'));
+      ALTER TABLE sales ADD COLUMN synced_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_sales_sync ON sales(sync_status);
+
+      -- suppliers
+      ALTER TABLE suppliers ADD COLUMN sync_status TEXT DEFAULT 'pending' CHECK(sync_status IN ('pending', 'synced'));
+      ALTER TABLE suppliers ADD COLUMN synced_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_suppliers_sync ON suppliers(sync_status);
+
+      -- purchase_orders
+      ALTER TABLE purchase_orders ADD COLUMN sync_status TEXT DEFAULT 'pending' CHECK(sync_status IN ('pending', 'synced'));
+      ALTER TABLE purchase_orders ADD COLUMN synced_at TEXT;
+      CREATE INDEX IF NOT EXISTS idx_po_sync ON purchase_orders(sync_status);
+
+      -- 2. Deletion Tracking / Tombstones
+      CREATE TABLE IF NOT EXISTS sync_tombstones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL CHECK(entity_type IN ('product', 'customer', 'sale', 'supplier', 'purchase_order')),
+        entity_mongo_id TEXT NOT NULL,
+        organization_id INTEGER,
+        deleted_at TEXT DEFAULT (datetime('now')),
+        sync_status TEXT DEFAULT 'pending' CHECK(sync_status IN ('pending', 'synced')),
+        synced_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_tombstones_sync ON sync_tombstones(sync_status);
+      CREATE INDEX IF NOT EXISTS idx_tombstones_entity ON sync_tombstones(entity_type, entity_mongo_id);
+
+      -- 3. Sync Execution History & Telemetry
+      CREATE TABLE IF NOT EXISTS sync_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_sync_id TEXT UNIQUE NOT NULL,
+        direction TEXT NOT NULL CHECK(direction IN ('push', 'pull', 'bidirectional')),
+        status TEXT NOT NULL CHECK(status IN ('in_progress', 'completed', 'failed')),
+        records_pushed INTEGER DEFAULT 0,
+        records_pulled INTEGER DEFAULT 0,
+        tombstones_pushed INTEGER DEFAULT 0,
+        tombstones_pulled INTEGER DEFAULT 0,
+        cursor_used TEXT,
+        cursor_new TEXT,
+        error_message TEXT,
+        started_at TEXT DEFAULT (datetime('now')),
+        completed_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_sync_history_status ON sync_history(status);
+      CREATE INDEX IF NOT EXISTS idx_sync_history_started ON sync_history(started_at);
+
+      -- 4. Sync State / Metadata Key-Value Table
+      CREATE TABLE IF NOT EXISTS sync_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `
+  },
+  {
+    version: 3,
+    name: "003_returns_and_invoice_revisions",
+    up: `
+      -- 1. Returns Audit Records (Tracks every partial / full return transaction)
+      CREATE TABLE IF NOT EXISTS sale_returns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        _id TEXT UNIQUE NOT NULL,
+        sale_id INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+        total_refund_amount REAL NOT NULL DEFAULT 0,
+        refund_method TEXT NOT NULL DEFAULT 'Cash' CHECK(refund_method IN ('Cash', 'Card', 'Online', 'UPI', 'Store Credit')),
+        reason TEXT,
+        sync_status TEXT DEFAULT 'pending' CHECK(sync_status IN ('pending', 'synced')),
+        synced_at TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_sale_returns_sale ON sale_returns(sale_id);
+      CREATE INDEX IF NOT EXISTS idx_sale_returns_org ON sale_returns(organization_id);
+
+      -- 2. Return Line Items
+      CREATE TABLE IF NOT EXISTS sale_return_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        _id TEXT UNIQUE NOT NULL,
+        sale_return_id INTEGER NOT NULL REFERENCES sale_returns(id) ON DELETE CASCADE,
+        sale_item_id INTEGER NOT NULL REFERENCES sale_items(id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES products(id),
+        quantity INTEGER NOT NULL,
+        unit_price REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        refund_amount REAL NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_return_items_return ON sale_return_items(sale_return_id);
+
+      -- 3. Invoice Modification / Revision Audit Log
+      CREATE TABLE IF NOT EXISTS sale_revisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        _id TEXT UNIQUE NOT NULL,
+        sale_id INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        previous_total REAL NOT NULL,
+        new_total REAL NOT NULL,
+        previous_payment_method TEXT,
+        new_payment_method TEXT,
+        reason TEXT,
+        items_diff_json TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_sale_revisions_sale ON sale_revisions(sale_id);
     `
   }
 ];

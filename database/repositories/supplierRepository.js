@@ -2,7 +2,7 @@
  * Mediblix Desktop — Supplier SQLite Repository
  */
 
-const { getDatabase, generateId, resolveOrgInternalId } = require('./baseRepository');
+const { getDatabase, generateId, resolveOrgInternalId, recordTombstone } = require('./baseRepository');
 
 function mapRow(row) {
   if (!row) return null;
@@ -94,6 +94,7 @@ const supplierRepository = {
         email = COALESCE(?, email),
         phone = COALESCE(?, phone),
         address = COALESCE(?, address),
+        sync_status = 'pending',
         updated_at = ?
       WHERE _id = ? OR id = ?
     `).run(
@@ -113,6 +114,8 @@ const supplierRepository = {
     const db = getDatabase();
     const existing = this.findById(idOrIdStr, orgId);
     if (!existing) return false;
+
+    recordTombstone('supplier', existing._id, existing.organizationId);
 
     const orgInternalId = resolveOrgInternalId(orgId);
     if (orgInternalId) {

@@ -5,11 +5,22 @@
 :root {
   --bg-main: #ffffff;
   --bg-card: #f8faf9;
+  --bg-card-subtle: #f1f5f3;
   --text-primary: #1a1a1a;
   --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
   --accent: #166534;
   --accent-light: #dcfce7;
+  --accent-hover: #14532d;
   --border-soft: #e5e7eb;
+  --border-strong: #d1d5db;
+
+  --input-bg: #ffffff;
+  --input-border: #e5e7eb;
+  --input-focus: #166534;
+
+  --modal-bg: rgba(255, 255, 255, 0.98);
+  --modal-border: rgba(229, 231, 235, 0.8);
 
   --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.05),
                  0 2px 4px -1px rgba(0, 0, 0, 0.03);
@@ -26,8 +37,104 @@
   -webkit-font-smoothing: antialiased;
 }
 
+.dark {
+  --bg-main: #0b130f;
+  --bg-card: #121f18;
+  --bg-card-subtle: #192b21;
+  --text-primary: #f0fdf4;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #22c55e;
+  --accent-light: #143522;
+  --accent-hover: #4ade80;
+  --border-soft: #1f3328;
+  --border-strong: #2a4537;
+
+  --input-bg: #121f18;
+  --input-border: #1f3328;
+  --input-focus: #22c55e;
+
+  --modal-bg: rgba(18, 31, 24, 0.98);
+  --modal-border: rgba(31, 51, 40, 0.9);
+
+  --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.3),
+                 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+
+  --shadow-strong: 0 20px 25px -5px rgba(0, 0, 0, 0.5),
+                   0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+.dark .bg-white\/95 {
+  background-color: rgba(18, 31, 24, 0.96) !important;
+}
+
+.dark .border-white\/80 {
+  border-color: rgba(31, 51, 40, 0.8) !important;
+}
+
+.dark .text-gray-900 {
+  color: #f0fdf4 !important;
+}
+
+.dark .text-gray-800 {
+  color: #e2e8f0 !important;
+}
+
+.dark .text-gray-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-gray-600 {
+  color: #94a3b8 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #1f3328 !important;
+}
+
+.dark .border-gray-100 {
+  border-color: #192b21 !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #0b130f !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #192b21 !important;
+}
+
+.dark .bg-slate-50 {
+  background-color: #121f18 !important;
+}
+
+.dark .bg-emerald-50\/50,
+.dark .bg-emerald-50 {
+  background-color: rgba(20, 53, 34, 0.4) !important;
+}
+
+.dark .border-emerald-200,
+.dark .border-emerald-100,
+.dark .border-emerald-200\/70 {
+  border-color: #1f3328 !important;
+}
+
+.dark .text-emerald-900,
+.dark .text-emerald-800 {
+  color: #86efac !important;
+}
+
+.dark .bg-white {
+  background-color: var(--bg-card) !important;
+}
+
+.dark .bg-white\/80 {
+  background-color: rgba(18, 31, 24, 0.85) !important;
+}
+
 body {
   margin: 0;
   background-color: var(--bg-main);
   color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }

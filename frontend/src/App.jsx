@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DeviceProvider } from './context/DeviceContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AuthState, { useAuth } from './context/AuthStates';
 import MainLayout from './layout/MainLayout';
 import LandingPage from './pages/LandingPage';
@@ -29,9 +30,10 @@ const ProtectedRoute = ({ children }) => {
 
 function App() {
   return (
-    <DeviceProvider>
-      <HashRouter>
-        <AuthState>
+    <ThemeProvider>
+      <DeviceProvider>
+        <HashRouter>
+          <AuthState>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
@@ -64,6 +66,7 @@ function App() {
         </AuthState>
       </HashRouter>
     </DeviceProvider>
+    </ThemeProvider>
   );
 }
 

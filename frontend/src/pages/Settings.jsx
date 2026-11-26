@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Settings as SettingsIcon, User, Bell, Shield, Palette, Globe, CreditCard, HelpCircle, LogOut, ChevronRight, Moon, Sun, Check, Mail, Smartphone } from 'lucide-react';
 import { useAuth } from '../context/AuthStates';
+import { useTheme } from '../context/ThemeContext';
 
 const Settings = () => {
   const { logout } = useAuth();
+  const { isDark, setTheme } = useTheme();
   const [activeSection, setActiveSection] = useState('profile');
-  const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -147,18 +148,18 @@ const Settings = () => {
               <h3 className="font-semibold text-[var(--text-primary)] mb-4">Theme</h3>
               <div className="grid grid-cols-2 gap-4">
                 <button
-                  onClick={() => setDarkMode(false)}
-                  className={`p-4 rounded-xl border-2 transition-all ${!darkMode ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border-soft)]'}`}
+                  onClick={() => setTheme('light')}
+                  className={`p-4 rounded-xl border-2 transition-all ${!isDark ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border-soft)]'}`}
                 >
-                  <Sun size={24} className={`mx-auto mb-2 ${!darkMode ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`} />
-                  <p className={`font-medium ${!darkMode ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>Light Mode</p>
+                  <Sun size={24} className={`mx-auto mb-2 ${!isDark ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`} />
+                  <p className={`font-medium ${!isDark ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>Light Mode</p>
                 </button>
                 <button
-                  onClick={() => setDarkMode(true)}
-                  className={`p-4 rounded-xl border-2 transition-all ${darkMode ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border-soft)]'}`}
+                  onClick={() => setTheme('dark')}
+                  className={`p-4 rounded-xl border-2 transition-all ${isDark ? 'border-[var(--accent)] bg-[var(--accent-light)]' : 'border-[var(--border-soft)]'}`}
                 >
-                  <Moon size={24} className={`mx-auto mb-2 ${darkMode ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`} />
-                  <p className={`font-medium ${darkMode ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>Dark Mode</p>
+                  <Moon size={24} className={`mx-auto mb-2 ${isDark ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`} />
+                  <p className={`font-medium ${isDark ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>Dark Mode</p>
                 </button>
               </div>
             </div>

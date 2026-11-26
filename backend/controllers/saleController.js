@@ -164,7 +164,7 @@ const generateInvoice = async (req, res) => {
 };
 
 const processReturn = async (req, res) => {
-  const { itemId, returnQuantity } = req.body;
+  const { itemId, returnQuantity, items, refundMethod, reason } = req.body;
 
   try {
     const orgId = await getTenantContext(req);
@@ -172,6 +172,9 @@ const processReturn = async (req, res) => {
       saleId: req.params.id,
       itemId,
       returnQuantity,
+      items,
+      refundMethod,
+      reason,
       orgId,
     });
 
@@ -181,4 +184,23 @@ const processReturn = async (req, res) => {
   }
 };
 
-export { createSale, getSales, generateInvoice, processReturn };
+const modifyInvoice = async (req, res) => {
+  const { paymentMethod, items, reason } = req.body;
+
+  try {
+    const orgId = await getTenantContext(req);
+    const updatedSale = saleRepository.modifyInvoice({
+      saleId: req.params.id,
+      paymentMethod,
+      items,
+      reason,
+      orgId,
+    });
+
+    res.json(updatedSale);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+};
+
+export { createSale, getSales, generateInvoice, processReturn, modifyInvoice };

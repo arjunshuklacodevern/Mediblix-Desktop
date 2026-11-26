@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAdminAuth } from "../context/AdminAuthStates";
+import ThemeToggle from "../components/ThemeToggle";
 
 const AdminLayout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -65,7 +66,7 @@ const AdminLayout = () => {
             className="flex items-center gap-2 text-xl font-extrabold text-[var(--text-primary)] hover:opacity-90 transition-opacity"
           >
             <img
-              src="/Mediblix-logo.png"
+              src="./Mediblix-logo.png"
               alt="Mediblix Logo"
               className="w-9 h-9 object-contain"
             />
@@ -77,6 +78,8 @@ const AdminLayout = () => {
         </div>
 
         <div className="flex items-center gap-2 lg:gap-3">
+          <ThemeToggle />
+
           <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-lg bg-[var(--bg-main)] border border-[var(--border-soft)]">
             <div className="w-6 h-6 rounded-full bg-[var(--accent-light)] text-[var(--accent)] flex items-center justify-center font-bold text-xs">
               <User size={13} />

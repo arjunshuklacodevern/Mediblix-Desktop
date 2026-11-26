@@ -331,6 +331,23 @@ app.whenReady().then(async () => {
   try {
     await startBackend();
     checkAndNotifyFirstRunCredentials();
+
+    // Register 2:00 AM nightly sync task in Windows Task Scheduler
+    try {
+      const { registerDailySyncTask } = require('./sync/scheduler');
+      registerDailySyncTask();
+    } catch (_) {}
+
+    // Trigger non-blocking opportunistic sync in background if online
+    if (app.isPackaged || process.env.MEDIBLIX_ENABLE_STARTUP_SYNC) {
+      setTimeout(() => {
+        try {
+          const { run: runSync } = require('./sync/syncRunner');
+          runSync().catch(e => console.log('[Electron] Startup sync non-blocking notice:', e.message));
+        } catch (_) {}
+      }, 5000);
+    }
+
     createPortalWindow();
   } catch (err) {
     console.error('[Electron] Fatal startup error:', err);

@@ -2,6 +2,8 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import path from "path";
+import { fileURLToPath } from "url";
+import { createRequire } from "module";
 import { initDatabase, closeDatabase } from "../database/db.js";
 import productRoutes from "./routes/productRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
@@ -14,9 +16,31 @@ import supplierRoutes from "./routes/supplierRoutes.js";
 import medAgentRoutes from "./routes/medAgentRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 
-const __dirname = path.resolve();
-dotenv.config();
-dotenv.config({ path: path.join(__dirname, "backend", ".env") });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, "..");
+
+// Load root .env first, then backend/.env
+dotenv.config({ path: path.join(rootDir, ".env") });
+dotenv.config({ path: path.join(__dirname, ".env") });
+
+// 0. Ensure persistent JWT_SECRET is loaded before any auth logic
+const require = createRequire(import.meta.url);
+const { getOrCreateJwtSecret } = require("../database/paths.js");
+
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim().length < 32) {
+  try {
+    process.env.JWT_SECRET = getOrCreateJwtSecret();
+  } catch (secretErr) {
+    console.error("[Desktop] FATAL: Failed to resolve persistent JWT_SECRET:", secretErr);
+    process.exit(1);
+  }
+}
+
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim().length < 32) {
+  console.error("[Desktop] FATAL: JWT_SECRET is missing or invalid. Halting startup.");
+  process.exit(1);
+}
 
 // 1. Initialize local SQLite database runtime
 // Ensure the server DOES NOT accept requests if SQLite fails to initialize
@@ -78,10 +102,10 @@ app.get("/api/health", (req, res) => {
 
 // 6. Frontend Static Assets (Production)
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "/frontend/dist")));
+  app.use(express.static(path.join(rootDir, "frontend", "dist")));
 
   app.get(/.*/, (req, res) =>
-    res.sendFile(path.resolve(__dirname, "frontend", "dist", "index.html"))
+    res.sendFile(path.resolve(rootDir, "frontend", "dist", "index.html"))
   );
 } else {
   app.get("/", (req, res) => {

@@ -2,7 +2,7 @@
  * Mediblix Desktop — Customer SQLite Repository
  */
 
-const { getDatabase, generateId, resolveOrgInternalId } = require('./baseRepository');
+const { getDatabase, generateId, resolveOrgInternalId, recordTombstone } = require('./baseRepository');
 
 function mapRow(row) {
   if (!row) return null;
@@ -144,6 +144,7 @@ const customerRepository = {
         email = COALESCE(?, email),
         address = COALESCE(?, address),
         notes = COALESCE(?, notes),
+        sync_status = 'pending',
         updated_at = ?
       WHERE _id = ? OR id = ?
     `).run(
@@ -164,6 +165,8 @@ const customerRepository = {
     const db = getDatabase();
     const existing = this.findById(idOrIdStr, orgId);
     if (!existing) return false;
+
+    recordTombstone('customer', existing._id, existing.organizationId);
 
     const orgInternalId = resolveOrgInternalId(orgId);
     if (orgInternalId) {

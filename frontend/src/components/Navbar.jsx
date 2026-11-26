@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useDevice } from '../context/DeviceContext';
 import { LayoutDashboard, Package, ShoppingCart, Users, Settings, Boxes, FileSpreadsheet } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
 
 const Navbar = () => {
   const { isMobile } = useDevice();
@@ -48,12 +49,13 @@ const Navbar = () => {
 
       <div className="absolute left-1/2 -translate-x-1/2">
         <Link to="/billing" className="flex items-center gap-2 text-xl font-extrabold text-[var(--text-primary)] hover:opacity-80 transition-opacity">
-          <img src="/Mediblix-logo.png" alt="Mediblix Logo" className="w-9 h-9 object-contain" />
+          <img src="./Mediblix-logo.png" alt="Mediblix Logo" className="w-9 h-9 object-contain" />
           <span>Mediblix</span>
         </Link>
       </div>
 
       <div className="flex items-center gap-1 lg:gap-2">
+        <ThemeToggle className="mr-1" />
         {rightNavItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);

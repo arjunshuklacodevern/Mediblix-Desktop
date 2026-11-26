@@ -39,7 +39,7 @@ function getInitialCredentialsPath() {
 }
 
 function getOrCreateJwtSecret() {
-  if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length > 0) {
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length >= 32) {
     return process.env.JWT_SECRET.trim();
   }
 
@@ -52,6 +52,7 @@ function getOrCreateJwtSecret() {
     try {
       const stored = fs.readFileSync(secretPath, 'utf8').trim();
       if (stored.length >= 32) {
+        process.env.JWT_SECRET = stored;
         return stored;
       }
     } catch (_) {}
@@ -64,6 +65,7 @@ function getOrCreateJwtSecret() {
   } catch (err) {
     console.error('[Security] Warning: Could not write persistent JWT secret file:', err.message);
   }
+  process.env.JWT_SECRET = newSecret;
   return newSecret;
 }
 

@@ -1,5 +1,18 @@
 import jwt from "jsonwebtoken";
+import { createRequire } from "module";
 import repositories from "../../database/repositories/index.js";
+
+const require = createRequire(import.meta.url);
+const { getOrCreateJwtSecret } = require("../../database/paths.js");
+
+const getJwtSecret = () => {
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length >= 32) {
+    return process.env.JWT_SECRET.trim();
+  }
+  const secret = getOrCreateJwtSecret();
+  process.env.JWT_SECRET = secret;
+  return secret;
+};
 
 const { userRepository, organizationRepository } = repositories;
 
@@ -12,7 +25,7 @@ const getTenantContext = async (req) => {
   ) {
     try {
       const token = req.headers.authorization.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, getJwtSecret());
       const user = userRepository.findById(decoded.id);
       if (user) {
         req.user = user;

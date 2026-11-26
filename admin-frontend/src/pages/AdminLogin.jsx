@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Loader2, ShieldCheck, ShieldAlert, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useAdminAuth } from "../context/AdminAuthStates";
+import ThemeToggle from "../components/ThemeToggle";
 
 const AdminLogin = () => {
   const [email, setEmail] = useState("");
@@ -29,41 +30,44 @@ const AdminLogin = () => {
   };
 
   return (
-    <div className="h-screen w-full grid grid-cols-1 lg:grid-cols-2 bg-white overflow-hidden font-sans">
-      <div className="flex flex-col justify-center items-center p-6 lg:p-12 relative bg-[#F8FAFF]">
+    <div className="h-screen w-full grid grid-cols-1 lg:grid-cols-2 bg-[var(--bg-main)] overflow-hidden font-sans">
+      <div className="flex flex-col justify-center items-center p-6 lg:p-12 relative bg-[var(--bg-card)]">
+        <div className="absolute top-6 right-6">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-[380px]">
           <div className="mb-8 text-left">
             <img
-              src="/Mediblix-logo.png"
+              src="./Mediblix-logo.png"
               alt="Mediblix Logo"
               className="w-16 h-16 object-contain mb-4"
             />
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold mb-4 tracking-wider uppercase">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-[10px] font-bold mb-4 tracking-wider uppercase border border-green-500/20">
               <ShieldCheck size={12} />
               Platform Admin Console
             </div>
-            <h1 className="text-3xl font-black text-gray-900 mb-3 tracking-tight">
+            <h1 className="text-3xl font-black text-[var(--text-primary)] mb-3 tracking-tight">
               Admin Login <span className="text-orange-400">⚡</span>
             </h1>
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <p className="text-[var(--text-secondary)] text-sm leading-relaxed">
               Welcome back! Please enter your administrator credentials.
             </p>
           </div>
 
           {localError && (
-            <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs flex items-center gap-2.5">
-              <ShieldAlert size={16} className="flex-shrink-0 text-red-600" />
+            <div className="mb-5 p-3.5 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-600 dark:text-red-400 text-xs flex items-center gap-2.5">
+              <ShieldAlert size={16} className="flex-shrink-0 text-red-600 dark:text-red-400" />
               <span className="font-medium">{localError}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">
+              <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-widest ml-1">
                 Admin Email
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-300 group-focus-within:text-green-600 transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[var(--text-secondary)] group-focus-within:text-green-600 transition-colors">
                   <Mail size={16} />
                 </div>
                 <input
@@ -71,18 +75,18 @@ const AdminLogin = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@mediblix.local"
-                  className="w-full pl-10 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-green-500/5 focus:border-green-600 transition-all placeholder:text-gray-300 shadow-sm"
+                  className="w-full pl-10 pr-4 py-3.5 bg-[var(--bg-main)] border border-[var(--border-soft)] rounded-2xl text-[var(--text-primary)] text-sm focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-600 transition-all placeholder:text-[var(--text-secondary)]/50 shadow-sm"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">
+              <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-widest ml-1">
                 Password
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-300 group-focus-within:text-green-600 transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[var(--text-secondary)] group-focus-within:text-green-600 transition-colors">
                   <Lock size={16} />
                 </div>
                 <input
@@ -90,13 +94,13 @@ const AdminLogin = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-11 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-green-500/5 focus:border-green-600 transition-all placeholder:text-gray-300 shadow-sm"
+                  className="w-full pl-10 pr-11 py-3.5 bg-[var(--bg-main)] border border-[var(--border-soft)] rounded-2xl text-[var(--text-primary)] text-sm focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-600 transition-all placeholder:text-[var(--text-secondary)]/50 shadow-sm"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer transition-colors"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer transition-colors"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -145,7 +149,7 @@ const AdminLogin = () => {
             <div className="relative w-full max-w-[380px]">
               <div className="bg-white/5 p-1.5 rounded-3xl">
                 <img
-                  src="/login_illustration.png"
+                  src="./login_illustration.png"
                   alt="Mediblix Dashboard"
                   className="w-full rounded-[1.5rem] object-cover shadow-2xl border border-white/10"
                 />

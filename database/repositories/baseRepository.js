@@ -28,9 +28,26 @@ function resolveOrgInternalId(orgIdOrCode) {
   return defaultOrg ? defaultOrg.id : null;
 }
 
+/**
+ * Records a deletion tombstone for synchronization
+ */
+function recordTombstone(entityType, entityMongoId, organizationId) {
+  if (!entityMongoId) return;
+  try {
+    const db = getDatabase();
+    db.prepare(`
+      INSERT INTO sync_tombstones (entity_type, entity_mongo_id, organization_id, deleted_at, sync_status)
+      VALUES (?, ?, ?, datetime('now'), 'pending')
+    `).run(entityType, String(entityMongoId), organizationId ? resolveOrgInternalId(organizationId) : null);
+  } catch (err) {
+    // If table doesn't exist yet (e.g., pre-migration tests), ignore safely
+  }
+}
+
 module.exports = {
   getDatabase,
   runInTransaction,
   generateId,
-  resolveOrgInternalId
+  resolveOrgInternalId,
+  recordTombstone
 };

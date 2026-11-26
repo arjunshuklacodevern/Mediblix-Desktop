@@ -21,9 +21,11 @@
     "test:pos": "node backend/tests/test_customers_and_sales.js",
     "test:orders": "node backend/tests/test_suppliers_and_orders.js",
     "test:admin": "node backend/tests/test_admin_and_ai.js",
+    "test:jwt": "node backend/tests/test_jwt_secret_persistence.js",
     "test:offline": "node backend/tests/test_offline_and_mongo_removal.js",
     "test:supervisor": "node electron/tests/test_backend_supervisor.js",
-    "test": "npm run test:db && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin && npm run test:offline && npm run test:supervisor",
+    "test:sync": "node electron/tests/test_device_auth.js && node electron/tests/test_bidirectional_sync.js && node electron/tests/test_scheduler.js",
+    "test": "npm run test:db && npm run test:jwt && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin && npm run test:offline && npm run test:supervisor && npm run test:sync",
     "pack": "npm run build:all && electron-builder --dir",
     "dist": "npm run build:all && electron-builder",
     "postinstall": "electron-builder install-app-deps"
@@ -59,6 +61,13 @@
       {
         "from": "build/bin/node.exe",
         "to": "bin/node.exe"
+      },
+      {
+        "from": "electron/sync",
+        "to": "electron/sync",
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "backend",

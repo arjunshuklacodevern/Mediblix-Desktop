@@ -2,7 +2,7 @@
  * Mediblix Desktop — Purchase Orders SQLite Repository
  */
 
-const { getDatabase, runInTransaction, generateId, resolveOrgInternalId } = require('./baseRepository');
+const { getDatabase, runInTransaction, generateId, resolveOrgInternalId, recordTombstone } = require('./baseRepository');
 const productRepository = require('./productRepository');
 
 function mapItemRow(row) {
@@ -176,7 +176,7 @@ const purchaseOrderRepository = {
 
       db.prepare(`
         UPDATE purchase_orders
-        SET status = ?, updated_at = ?
+        SET status = ?, sync_status = 'pending', updated_at = ?
         WHERE _id = ? OR id = ?
       `).run(status, now, String(idOrIdStr), String(idOrIdStr));
 
@@ -188,6 +188,8 @@ const purchaseOrderRepository = {
     const db = getDatabase();
     const existing = this.findById(idOrIdStr, orgId);
     if (!existing) return false;
+
+    recordTombstone('purchase_order', existing._id, existing.organizationId);
 
     const orgInternalId = resolveOrgInternalId(orgId);
     if (orgInternalId) {

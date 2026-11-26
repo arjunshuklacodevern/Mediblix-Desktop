@@ -2,7 +2,7 @@
  * Mediblix Desktop — Product & Inventory SQLite Repository
  */
 
-const { getDatabase, generateId, resolveOrgInternalId } = require('./baseRepository');
+const { getDatabase, generateId, resolveOrgInternalId, recordTombstone } = require('./baseRepository');
 
 function computeStatus(quantity) {
   const qty = Number(quantity) || 0;
@@ -169,6 +169,7 @@ const productRepository = {
         hsn = COALESCE(?, hsn),
         packaging = COALESCE(?, packaging),
         tablets_per_strip = COALESCE(?, tablets_per_strip),
+        sync_status = 'pending',
         updated_at = ?
       WHERE _id = ? OR id = ?
     `).run(
@@ -202,6 +203,7 @@ const productRepository = {
             WHEN quantity - ? < 10 THEN 'Low Stock'
             ELSE 'In Stock'
           END,
+          sync_status = 'pending',
           updated_at = ?
       WHERE id = ? AND quantity >= ?
     `).run(qty, qty, qty, now, productId, qty);
@@ -219,6 +221,7 @@ const productRepository = {
             WHEN quantity + ? < 10 THEN 'Low Stock'
             ELSE 'In Stock'
           END,
+          sync_status = 'pending',
           updated_at = ?
       WHERE id = ?
     `).run(qty, qty, qty, now, productId);
@@ -227,6 +230,10 @@ const productRepository = {
 
   delete(idOrIdStr) {
     const db = getDatabase();
+    const existing = this.findById(idOrIdStr);
+    if (existing) {
+      recordTombstone('product', existing._id, existing.organizationId);
+    }
     const res = db.prepare('DELETE FROM products WHERE _id = ? OR id = ?').run(String(idOrIdStr), String(idOrIdStr));
     return res.changes > 0;
   }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthStates';
 import { Mail, Lock, Loader2, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../components/ThemeToggle';
 // Image used directly from public folder
 
 const LoginPage = () => {
@@ -30,35 +31,38 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="h-screen w-full grid grid-cols-1 lg:grid-cols-2 bg-white overflow-hidden font-sans">
+    <div className="h-screen w-full grid grid-cols-1 lg:grid-cols-2 bg-[var(--bg-main)] overflow-hidden font-sans">
       {/* Left Column: Form */}
-      <div className="flex flex-col justify-center items-center p-6 lg:p-12 relative bg-[#F8FAFF]">
+      <div className="flex flex-col justify-center items-center p-6 lg:p-12 relative bg-[var(--bg-card)]">
+        <div className="absolute top-6 right-6">
+          <ThemeToggle />
+        </div>
         <div className="w-full max-w-[380px]">
           <div className="mb-8 text-left">
-            <img src="/Mediblix-logo.png" alt="Mediblix Logo" className="w-16 h-16 object-contain mb-4" />
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-50 text-green-600 rounded-full text-[10px] font-bold mb-4 tracking-wider uppercase">
+            <img src="./Mediblix-logo.png" alt="Mediblix Logo" className="w-16 h-16 object-contain mb-4" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full text-[10px] font-bold mb-4 tracking-wider uppercase border border-green-500/20">
               <Package size={10} />
               Inventory System
             </div>
-            <h1 className="text-3xl font-black text-gray-900 mb-3 tracking-tight">
+            <h1 className="text-3xl font-black text-[var(--text-primary)] mb-3 tracking-tight">
               Login <span className="text-orange-400">✌️</span>
             </h1>
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <p className="text-[var(--text-secondary)] text-sm leading-relaxed">
               Welcome back! Please enter your details.
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
+              <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-widest ml-1">Email</label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-300 group-focus-within:text-green-600 transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[var(--text-secondary)] group-focus-within:text-green-600 transition-colors">
                   <Mail size={16} />
                 </div>
                 <input
@@ -66,16 +70,16 @@ const LoginPage = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@Mediblix.com"
-                  className="w-full pl-10 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-green-500/5 focus:border-green-600 transition-all placeholder:text-gray-300 shadow-sm"
+                  className="w-full pl-10 pr-4 py-3.5 bg-[var(--bg-main)] border border-[var(--border-soft)] rounded-2xl text-[var(--text-primary)] text-sm focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-600 transition-all placeholder:text-[var(--text-secondary)]/50 shadow-sm"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
+              <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-widest ml-1">Password</label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-300 group-focus-within:text-green-600 transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[var(--text-secondary)] group-focus-within:text-green-600 transition-colors">
                   <Lock size={16} />
                 </div>
                 <input
@@ -83,7 +87,7 @@ const LoginPage = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-3.5 bg-white border border-gray-200 rounded-2xl text-gray-900 text-sm focus:outline-none focus:ring-4 focus:ring-green-500/5 focus:border-green-600 transition-all placeholder:text-gray-300 shadow-sm"
+                  className="w-full pl-10 pr-4 py-3.5 bg-[var(--bg-main)] border border-[var(--border-soft)] rounded-2xl text-[var(--text-primary)] text-sm focus:outline-none focus:ring-4 focus:ring-green-500/10 focus:border-green-600 transition-all placeholder:text-[var(--text-secondary)]/50 shadow-sm"
                   required
                 />
               </div>
@@ -138,7 +142,7 @@ const LoginPage = () => {
             <div className="relative w-full max-w-[380px]">
               <div className="bg-white/5 p-1.5 rounded-3xl">
                 <img
-                  src="/login_illustration.png"
+                  src="./login_illustration.png"
                   alt="Mediblix Dashboard"
                   className="w-full rounded-[1.5rem] object-cover shadow-2xl border border-white/10"
                 />
