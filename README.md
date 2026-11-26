@@ -18,9 +18,9 @@ Mediblix-Desktop/
 ├── admin-frontend/           # Super Admin React app (Vite + React 18)
 │   ├── dist/                 # Production compiled bundle
 │   └── src/                  # React source (HashRouter for desktop file://)
-├── backend/                  # Express + MongoDB backend (reference & dev API)
+├── backend/                  # Express + SQLite local-first API server
 ├── database/                 # SQLite local-first architecture
-│   ├── schema.js             # SQLite DDL schema matching all MongoDB models
+│   ├── schema.js             # SQLite DDL schema (12 tables)
 │   └── MIGRATION_PLAN.md     # In-depth MongoDB-to-SQLite migration & ACID guide
 ├── build/                    # Build resources (256x256 icon.ico, icon.png)
 ├── dist-electron/            # Packaged desktop outputs
@@ -32,12 +32,17 @@ Mediblix-Desktop/
 ## Quick Start (Development)
 
 ```bash
-# 1. Install root + all frontend dependencies
+# 1. Install root + backend + frontend dependencies
 npm install
+npm install --prefix backend
 npm install --prefix frontend
 npm install --prefix admin-frontend
 
-# 2. Run Electron in development mode (starts both Vite dev servers + Electron shell)
+# 2. Configure frontend environment files (for dev mode)
+cp frontend/.env.example frontend/.env
+cp admin-frontend/.env.example admin-frontend/.env
+
+# 3. Run Electron in development mode (starts both Vite dev servers + Electron shell)
 npm run dev
 ```
 
@@ -102,6 +107,6 @@ node electron/runner.js electron/verify-runtime.js
 
 ## Local-First & SQLite Status
 
-- **Schema Scaffolded**: `database/schema.js` provides full DDL matching existing MongoDB models (`organizations`, `users`, `products`, `customers`, `sales`, `sale_items`, `suppliers`, `purchase_orders`, `import_history`).
+- **SQLite Complete**: `database/schema.js` and `database/repositories/*` power all core workflows (products, inventory, POS billing, customers, suppliers, purchase orders, returns, import history, and admin management) completely offline.
 - **Migration Plan**: `database/MIGRATION_PLAN.md` documents atomic transactional sales processing, inventory decrements, and automatic daily backups (`VACUUM INTO`).
-- **Current Data Mode**: Frontends currently connect to the backend API (`VITE_BACKEND_URL`). Full offline SQLite operation is staged for the subsequent phase.
+- **MongoDB Removed**: Mongoose/MongoDB has been completely removed from `backend/`. AI inference (Gemini) is the only feature requiring internet access.

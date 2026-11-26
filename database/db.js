@@ -37,23 +37,17 @@ try {
 }
 
 const { CURRENT_SCHEMA_VERSION, MIGRATIONS } = require('./schema');
+const { getCanonicalDbPath, ensureDbDirExists, getCanonicalDbDir } = require('./paths');
 
 let dbInstance = null;
 
 /**
- * Resolves default database file path in %APPDATA%/Mediblix/mediblix.db
+ * Resolves canonical database file path in %APPDATA%/Mediblix/mediblix.db
  */
 function getDefaultDbPath() {
-  const appData = process.env.APPDATA || (
-    process.platform === 'darwin'
-      ? path.join(process.env.HOME || '', 'Library/Application Support')
-      : path.join(process.env.HOME || '', '.config')
-  );
-  const mediblixDir = path.join(appData, 'Mediblix');
-  if (!fs.existsSync(mediblixDir)) {
-    fs.mkdirSync(mediblixDir, { recursive: true });
-  }
-  return path.join(mediblixDir, 'mediblix.db');
+  const dbPath = getCanonicalDbPath();
+  ensureDbDirExists(dbPath);
+  return dbPath;
 }
 
 /**
@@ -219,7 +213,8 @@ function initDatabase(customPath) {
     return dbInstance;
   }
 
-  const targetPath = customPath || process.env.SQLITE_DB_PATH || getDefaultDbPath();
+  // Resolves custom path, or canonical path (which supports MEDIBLIX_DB_PATH / SQLITE_DB_PATH override)
+  const targetPath = customPath || getDefaultDbPath();
   const isMemory = targetPath === ':memory:';
 
   if (!isMemory) {
@@ -293,5 +288,7 @@ module.exports = {
   generateId,
   seedDefaults,
   getDefaultDbPath,
+  getCanonicalDbPath,
+  getCanonicalDbDir,
   CURRENT_SCHEMA_VERSION
 };

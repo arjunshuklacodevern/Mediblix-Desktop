@@ -1,9 +1,58 @@
-import { Package, TrendingUp, AlertTriangle, Truck, IndianRupee, ArrowUp, ArrowDown, Users, ShoppingCart, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Package, TrendingUp, AlertTriangle, Truck, IndianRupee, ArrowUp, ArrowDown, Users, ShoppingCart, Sparkles, CalendarClock, ArrowRight } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
+import productService from '../services/productService';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [liveAlerts, setLiveAlerts] = useState({
+    loading: true,
+    totalProducts: 0,
+    lowStock: [],
+    outOfStock: [],
+    expiringSoon: [],
+    expired: [],
+  });
+
+  useEffect(() => {
+    let active = true;
+    const loadAlerts = async () => {
+      try {
+        const products = await productService.getProducts();
+        if (!active || !Array.isArray(products)) return;
+        const now = new Date();
+        const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+        const outOfStock = products.filter((p) => (Number(p.quantity) || 0) === 0);
+        const lowStock = products.filter((p) => {
+          const qty = Number(p.quantity) || 0;
+          const min = Number(p.minStock) || 10;
+          return qty > 0 && qty < min;
+        });
+        const expired = products.filter((p) => p.expiryDate && new Date(p.expiryDate) < now);
+        const expiringSoon = products.filter((p) => {
+          if (!p.expiryDate) return false;
+          const exp = new Date(p.expiryDate);
+          return exp >= now && exp <= in30Days;
+        });
+
+        setLiveAlerts({
+          loading: false,
+          totalProducts: products.length,
+          lowStock,
+          outOfStock,
+          expiringSoon,
+          expired,
+        });
+      } catch (err) {
+        console.error('Failed to load live inventory alerts:', err);
+        if (active) setLiveAlerts((prev) => ({ ...prev, loading: false }));
+      }
+    };
+    loadAlerts();
+    return () => { active = false; };
+  }, []);
 
   const revenueData = [
     { name: 'Jan', revenue: 4000, orders: 240 },
@@ -83,10 +132,81 @@ const Dashboard = () => {
     <div className="min-h-full w-full bg-[var(--bg-main)] p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)]">Dashboard</h1>
-          <p className="text-[var(--text-secondary)] mt-1">Overview of your inventory analytics</p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-[var(--text-primary)]">Dashboard</h1>
+            <p className="text-[var(--text-secondary)] mt-1">Overview of your inventory analytics</p>
+          </div>
+          {!liveAlerts.loading && (
+            <span className="text-xs font-medium px-3 py-1.5 rounded-full bg-[var(--bg-card)] border border-[var(--border-soft)] text-[var(--text-secondary)]">
+              Live Inventory: <strong className="text-[var(--text-primary)]">{liveAlerts.totalProducts}</strong> products tracked
+            </span>
+          )}
         </div>
+
+        {/* Live Attention Required Alerts */}
+        {!liveAlerts.loading && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              onClick={() => navigate('/inventory')}
+              className="text-left bg-[var(--bg-card)] rounded-2xl p-5 border border-amber-200 hover:shadow-md transition-all cursor-pointer flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <AlertTriangle size={22} className="text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-secondary)]">Low / Out of Stock</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">
+                    {liveAlerts.lowStock.length + liveAlerts.outOfStock.length}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    {liveAlerts.outOfStock.length} out of stock • {liveAlerts.lowStock.length} low
+                  </p>
+                </div>
+              </div>
+              <ArrowRight size={18} className="text-amber-600" />
+            </button>
+
+            <button
+              onClick={() => navigate('/inventory')}
+              className="text-left bg-[var(--bg-card)] rounded-2xl p-5 border border-red-200 hover:shadow-md transition-all cursor-pointer flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center">
+                  <CalendarClock size={22} className="text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-secondary)]">Expired / Expiring (30d)</p>
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">
+                    {liveAlerts.expired.length + liveAlerts.expiringSoon.length}
+                  </p>
+                  <p className="text-xs text-red-700 mt-0.5">
+                    {liveAlerts.expired.length} expired • {liveAlerts.expiringSoon.length} expiring soon
+                  </p>
+                </div>
+              </div>
+              <ArrowRight size={18} className="text-red-600" />
+            </button>
+
+            <button
+              onClick={() => navigate('/billing')}
+              className="text-left bg-[var(--bg-card)] rounded-2xl p-5 border border-[var(--border-soft)] hover:shadow-md transition-all cursor-pointer flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center">
+                  <ShoppingCart size={22} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-secondary)]">Quick Action</p>
+                  <p className="text-lg font-bold text-[var(--text-primary)]">Open POS Billing</p>
+                  <p className="text-xs text-emerald-700 mt-0.5">Start a new customer checkout</p>
+                </div>
+              </div>
+              <ArrowRight size={18} className="text-emerald-600" />
+            </button>
+          </div>
+        )}
 
         {/* Stats Cards - Unique Style */}
         {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

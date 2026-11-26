@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import purchaseOrderService from '../services/purchaseOrderService';
 import AddPurchaseOrderChoiceModal from '../components/Orders/AddPurchaseOrderChoiceModal';
 import AddPurchaseOrderDrawer from '../components/Orders/AddPurchaseOrderDrawer';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -11,6 +12,7 @@ const Orders = () => {
   const [loading, setLoading] = useState(true);
   const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,15 +30,20 @@ const Orders = () => {
     }
   };
 
-  const handleDelete = async (id, e) => {
+  const handleDelete = (id, e) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this purchase order?")) {
-      try {
-        await purchaseOrderService.deletePurchaseOrder(id);
-        fetchOrders();
-      } catch (error) {
-        console.error(error);
-      }
+    setDeleteTargetId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await purchaseOrderService.deletePurchaseOrder(deleteTargetId);
+      setDeleteTargetId(null);
+      fetchOrders();
+    } catch (error) {
+      console.error(error);
+      setDeleteTargetId(null);
     }
   };
 
@@ -117,6 +124,12 @@ const Orders = () => {
 
         {loading ? (
           <div className="p-8 text-center text-[var(--text-secondary)]">Loading purchase orders...</div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="bg-[var(--bg-card)] rounded-2xl p-12 border border-[var(--border-soft)] text-center flex flex-col items-center gap-3 text-[var(--text-secondary)]">
+            <ShoppingCart size={36} className="opacity-40" />
+            <p className="font-medium text-[var(--text-primary)]">No purchase orders match your search</p>
+            <p className="text-sm">Try a different keyword or create a new purchase order.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredOrders.map((order) => {
@@ -189,6 +202,15 @@ const Orders = () => {
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         onOrderCreated={fetchOrders}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTargetId)}
+        title="Delete Purchase Order"
+        message="Are you sure you want to delete this purchase order? This cannot be undone."
+        confirmLabel="Delete Order"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
       />
     </div>
   );

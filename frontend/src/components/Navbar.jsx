@@ -1,10 +1,31 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useDevice } from '../context/DeviceContext';
 import { LayoutDashboard, Package, ShoppingCart, Users, Settings, Boxes, FileSpreadsheet } from 'lucide-react';
+import api from '../services/api';
 
 const Navbar = () => {
   const { isMobile } = useDevice();
   const location = useLocation();
+  const [backendHealthy, setBackendHealthy] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const checkHealth = async () => {
+      try {
+        await api.get('/health', { timeout: 3000 });
+        if (mounted) setBackendHealthy(true);
+      } catch {
+        if (mounted) setBackendHealthy(false);
+      }
+    };
+    checkHealth();
+    const timer = setInterval(checkHealth, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   if (isMobile) return null;
 
@@ -54,6 +75,17 @@ const Navbar = () => {
       </div>
 
       <div className="flex items-center gap-1 lg:gap-2">
+        <span
+          title={backendHealthy ? 'Local SQLite backend connected' : 'Backend unreachable'}
+          className={`hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+            backendHealthy
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-red-50 text-red-700 border-red-200'
+          }`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${backendHealthy ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          {backendHealthy ? 'Local SQLite' : 'Offline'}
+        </span>
         {rightNavItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);

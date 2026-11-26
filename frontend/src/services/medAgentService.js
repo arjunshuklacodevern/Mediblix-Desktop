@@ -21,8 +21,20 @@ const getCategories = async () => {
   return response.data;
 };
 
+const getStatus = async () => {
+  const response = await api.get("/medagent/status");
+  return response.data;
+};
+
+const getInsights = async () => {
+  const response = await api.get("/medagent/insights");
+  return response.data;
+};
+
 export default {
   sendMessage,
   getAlternatives,
   getCategories,
+  getStatus,
+  getInsights,
 };

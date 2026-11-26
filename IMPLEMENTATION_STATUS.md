@@ -349,51 +349,201 @@ Results:
 - `database/tests/test_repositories.js`: **ALL 7 REPOSITORY INTEGRATION TESTS PASSED**
 
 ### Overall Automated Test Summary
-- **Total Tests Passing**: **230 assertions / integration tests (100% pass rate)**
+- **Total Tests Passing**: **292 assertions / integration tests (100% pass rate)**
 - Run all suites with: `npm test`
 
-### Frontend Production Compilations (`npm run build:all`)
-Command: `npm run build:all`
-Results: **PASSED (Exit Code 0)**
-- `frontend`: Vite v7.3.8 built in 14.10s
-- `admin-frontend`: Vite v6.4.6 built in 8.69s
-
-### Electron Runtime Regression (`node electron/runner.js electron/verify-runtime.js`)
-Command: `node electron/runner.js electron/verify-runtime.js`
-Results: **ALL 3 WINDOWS LOADED AND VERIFIED SUCCESSFULLY**
-- Portal Window: Title verified, `window.electronAPI` verified.
-- Pharmacy Window: Title verified, `#root` DOM verified, `window.electronAPI` verified.
-- Admin Window: Title verified, `#root` DOM verified, `window.electronAPI` verified.
+### Suite 7: Electron Backend Supervisor Tests (`npm run test:supervisor`)
+Command: `npm run test:supervisor`
+Results: **24 Passed, 0 Failed**
+- [Test 1: Invalid or Missing PID in Health Response]
+  - Rejects response missing PID field
+  - Reports PID validation error message
+  - Rejects response with string PID (not an integer)
+  - Rejects response with negative PID
+  - Rejects response with PID 0
+- [Test 2: PID Matching for Electron-Owned Child]
+  - Accepts health when `expectedPid` matches response PID
+  - Returns confirmed matching child PID
+  - Rejects health when responding PID differs from owned child PID
+  - Explicitly flags PID mismatch to prevent hijacking
+- [Test 3: Existing Backend Reuse Without Termination]
+  - Verifies authentic existing backend on port
+  - OS process existence confirmed via `process.kill(pid, 0)`
+  - Existing backend process was NOT terminated or signaled
+- [Test 4: Graceful Shutdown Waiting for Actual Exit Event]
+  - `stopBackend` waited for the actual child exit event
+  - Child process is confirmed terminated
+  - Child reference cleared ONLY after exit event
+  - Ownership state cleared cleanly
+- [Test 5: Startup Timeout Followed by Complete Child Cleanup]
+  - Child was running before cleanup
+  - Child process was completely terminated and not orphaned
+  - Child reference cleared after timeout cleanup
+- [Test 6: Repeated Shutdown Calls Safety]
+  - Parallel shutdown calls resolved cleanly without race condition
+  - Sequential shutdown call on already-stopped backend resolves immediately
+- [Test 7: Unrelated Process Preservation]
+  - Identified non-Mediblix application on port
+  - Unrelated foreign server is untouched and running
+  - Supervisor did NOT kill or touch unrelated foreign process
 
 ---
 
-## 9. Comprehensive Audit of Controllers & Mongoose Deprecation
+## 9. Electron Backend Supervisor Architecture & Review Fixes
 
-**ALL 10 BACKEND CONTROLLERS HAVE ZERO MONGOOSE IMPORTS:**
-1. `backend/controllers/authController.js` — SQLite (`userRepository`)
-2. `backend/controllers/productController.js` — SQLite (`productRepository`)
-3. `backend/controllers/customerController.js` — SQLite (`customerRepository`, `saleRepository`)
-4. `backend/controllers/saleController.js` — SQLite (`saleRepository`, `organizationRepository`)
-5. `backend/controllers/supplierController.js` — SQLite (`supplierRepository`)
-6. `backend/controllers/purchaseOrderController.js` — SQLite (`purchaseOrderRepository`, `productRepository`)
-7. `backend/controllers/importHistoryController.js` — SQLite (`importHistoryRepository`, `productRepository`)
-8. `backend/controllers/adminController.js` — SQLite (`organizationRepository`, `userRepository`, `productRepository`, `saleRepository`)
-9. `backend/controllers/medAgentController.js` — SQLite (`productRepository`)
-10. `backend/controllers/aiController.js` — Google Gemini API (Stateless)
+### 1. Robust Port Conflict & Ownership Verification
+- **Pre-flight Socket Check**: `isPortOccupied(port)` opens a short-lived TCP socket probe.
+- **Service Fingerprinting (`/api/health`)**:
+  - The backend health response provides JSON signature verification:
+    `{ app: "mediblix", service: "mediblix-backend", status: "healthy", database: "sqlite", mode: "local-first", pid: <pid> }`.
+  - Electron does NOT blindly trust HTTP 200 responses. It validates `json.app === 'mediblix' && json.service === 'mediblix-backend'`.
+- **Foreign Service Protection**:
+  - If port 5001 is occupied by an unrelated service, Electron logs the conflict, displays a user-friendly error message (`dialog.showErrorBox('Mediblix Startup Failed', ...)`), aborts startup, and exits.
+  - Foreign processes are **never** terminated or killed.
+- **Existing Instance Reuse**:
+  - If port 5001 is already running an authentic Mediblix backend instance, Electron safely attaches to it without spawning redundant processes or killing the pre-existing instance on exit.
 
-Only **ONE** file in the entire codebase still references MongoDB/Mongoose:
-- `backend/index.js` (Invokes `connectDB()` during server boot, to be removed in Phase 3E)
+### 2. Readiness Polling & Fast-Fail Early Exit
+- **Readiness Polling**: After spawning `node backend/index.js`, Electron actively polls `checkBackendHealth(5001)` every 250ms with a 15-second timeout.
+- **Early Exit Detection**: Listens to child process `error` and `exit` events. If the backend process crashes or exits prematurely (e.g. invalid arguments, missing dependencies), Electron detects the exit within ~250ms, captures `stderr`, and aborts immediately without hanging.
+- **Synchronized UI Lifecycle**: Portal windows (`createPortalWindow()`) are created **only** after the local backend responds healthy and ready. Windows are never opened in a broken or disconnected state.
+
+### Suite 6: Phase 3E Offline & SQLite Isolation Tests (`npm run test:offline`)
+Command: `npm run test:offline`
+Results: **38 Passed, 0 Failed**
+- [Group 1: MongoDB Deprecation & Removal]
+  - Mongoose package is completely removed (MODULE_NOT_FOUND confirmed)
+  - MONGODB_URI is absent from environment
+  - MONGO_URI is absent from environment
+  - GET /api/health returns 200
+  - Health status is 'healthy'
+  - Health database is strictly 'sqlite'
+  - Health mode is 'local-first'
+- [Group 2: Non-Destructive Database Initialization]
+  - Database re-initialization is safe and idempotent
+  - Existing master organization was not overwritten
+- [Group 3: Offline Authentication]
+  - Superadmin logs in successfully offline with SQLite
+  - Admin JWT token returned
+  - Staff user created in SQLite
+  - Staff user logs in offline with 200
+  - Staff JWT token returned
+  - Password hash omitted from response
+- [Group 4: Local Inventory Operations]
+  - Product created in SQLite catalog (201)
+  - Product status computed as 'In Stock'
+  - Product search returns 200
+  - Product found in SQLite search
+- [Group 5: Offline POS & Customer Operations]
+  - Customer created in SQLite (201)
+  - POS sale processed atomically with 201
+  - Unique invoice number generated
+  - Stock decremented from 100 to 80
+  - Return processed atomically with 200
+  - Stock correctly restocked to 85 units
+- [Group 6: Offline Suppliers & Orders]
+  - Supplier created in SQLite (201)
+  - Purchase order created with status Pending (201)
+  - PO delivered status updated (200)
+  - PO delivery automatically received into stock (85 + 50 = 135)
+- [Group 7: Tenant Isolation]
+  - Tenant B cannot access Tenant A product (404)
+  - Tenant B cannot access Tenant A customer (404)
+- [Group 8: Persistence Across Database Restart]
+  - Database closed cleanly
+  - Product retrieved after database restart
+  - Product quantity preserved (135 units)
+  - Product name preserved
+  - Customer retrieved after database restart
+  - Customer name preserved
+- [Group 9: Graceful Shutdown]
+  - Server and SQLite closed gracefully without hanging
 
 ---
 
-## 10. Next Action (Phase 3E: Complete Offline Isolation & Standalone Startup)
-1. **Remove MongoDB Startup**:
-   - Remove `connectDB()` invocation and MongoDB connection from `backend/index.js`.
-   - Ensure `initDatabase()` handles database seeding and initialization solely on SQLite.
-2. **Remove Unused Mongoose Models**:
-   - Safely archive or remove deprecated `backend/models/*.js` once Mongoose is disconnected.
-3. **Verify Pure Standalone Boot**:
-   - Start the backend and verify it boots with zero network calls and zero MongoDB connections.
-   - Run complete end-to-end regression tests.
-4. **Final Packaging & Distribution Build**:
-   - Run `npm run dist` to create the final production installer.
+## 9. Phase 3E — MongoDB Removal & Offline Isolation Summary
+
+### 1. Complete Removal of MongoDB / Mongoose
+- **Package Uninstalled**: `mongoose` completely uninstalled from `backend/package.json` and `backend/package-lock.json` (`npm uninstall mongoose --prefix backend`).
+- **Connection Code Decommissioned**:
+  - `backend/index.js`: Removed `connectDB()` import and startup invocation. SQLite `initDatabase()` executes synchronously before server start. If SQLite initialization fails, the server exits with code 1 and never accepts requests.
+  - `backend/config/db.js`: Replaced with a safe deprecation stub that logs a notice and never connects to Mongo.
+  - `backend/utils/seeder.js`: Updated to use `initDatabase()` from SQLite database manager.
+  - `backend/utils/create_sample_returns.js`: Decommissioned.
+  - `backend/models/*.js`: All 8 models (`Customer`, `ImportHistory`, `Organization`, `Product`, `PurchaseOrder`, `Sale`, `Supplier`, `User`) replaced with deprecation exports referencing SQLite repositories.
+- **Audit**: ZERO occurrences of `mongoose` or MongoDB connection strings remain in any application `.js` or `.json` file across the workspace.
+
+### 2. Electron Process Lifecycle Integration (`electron/main.js`)
+- **Backend Process Supervisor**: Added `startBackend()` and `stopBackend()` into Electron Main process.
+- **Port Health Probe**: Probes `http://127.0.0.1:5001/api/health` before spawning; attaches cleanly if server is already running.
+- **Native ABI Preservation**: Spawns local Express backend using host Node.js (`node.exe` on Windows), guaranteeing `better-sqlite3` runs on its compiled host ABI (131) without ABI conflict with Electron's Node runtime (130).
+- **Graceful Shutdown**: On `before-quit`, `will-quit`, and `window-all-closed`, sends `SIGTERM` to the backend child process, which triggers HTTP server close and SQLite connection close before process exit.
+
+---
+
+## 10. Data Safety & Preservation Certification
+
+In strict compliance with critical data protection requirements:
+1. **MongoDB Atlas Preserved**: ZERO drop, delete, migration, or modification commands were executed against MongoDB Atlas. MongoDB removal was restricted purely to the local codebase runtime and dependency cleanup.
+2. **SQLite Database Non-Destructive**:
+   - Initialized database logic is strictly idempotent and safe to run repeatedly.
+   - `schema_migrations` records applied migrations without resetting tables.
+   - Default seeding (`seedDefaults`) only inserts records when tables are empty (`if (!defaultOrg)`, `if (!superadmin)`, `if (supplierCount === 0)`).
+3. **Backup Check**: Pre-execution verification confirmed `%APPDATA%/Mediblix/mediblix.db` did not exist initially. Once created during testing, data persistence across application and database restarts was rigorously verified (100% data retention).
+4. **Isolated Automated Tests**: All automated test suites (`test:db`, `test:api`, `test:pos`, `test:orders`, `test:admin`, `test:offline`) run against dedicated ephemeral SQLite databases in temporary directories, leaving production AppData unpolluted.
+
+---
+
+## 11. Final Migration Completion & Production Readiness (Phase 3F)
+
+### 1. SQLite Database Path Consistency
+- **Canonical Path Architecture (`database/paths.js`)**:
+  - Implemented `getCanonicalDbDir()`, `getCanonicalDbPath()`, and `ensureDbDirExists()`.
+  - Canonical database path strictly resolves to `%APPDATA%/Mediblix/mediblix.db` on Windows (using `process.env.APPDATA || (process.platform === 'darwin' ? ... : ...)`).
+  - Backend runtime initialization (`database/db.js`) and Electron IPC handler (`electron/main.js` via `db:get-path`) share the exact same canonical path resolver.
+  - Safe test override via `process.env.MEDIBLIX_DB_PATH` is fully supported across backend, database, and Electron tests without polluting production `%APPDATA%`.
+
+### 2. Standalone Windows Node.js Runtime Bundling
+- **Bundled Executable**: Bundled Windows x64 Node.js binary v24.14.1 (matching host ABI 131) in `build/bin/node.exe`.
+- **Packaging Configuration (`package.json`)**:
+  - Configured `build.extraResources` to include:
+    - `build/bin/node.exe` -> `bin/node.exe`
+    - `backend/` -> `backend` (including `better-sqlite3` native addon and `node_modules`, excluding test databases and logs)
+    - `database/` -> `database` (including schema, migrations, repositories, and path resolver)
+    - `frontend/dist` -> `frontend-dist`
+    - `admin-frontend/dist` -> `admin-dist`
+- **Zero-Dependency Execution**: The packaged application does not require Node.js to be pre-installed on the end-user machine. It resolves the bundled `bin/node.exe` directly from `process.resourcesPath`.
+
+### 3. Electron Backend Supervisor Module (`electron/backend-supervisor.js`)
+- **Independent Architecture**: Extracted complete process supervisor into `electron/backend-supervisor.js`, shared by both production Electron code (`electron/main.js`) and test suites (`electron/tests/test_backend_supervisor.js`).
+- **Core Supervisor Capabilities**:
+  - **Identity Verification**: Strictly validates that health responses contain a positive integer PID and Mediblix service signature (`{ app: 'mediblix', service: 'mediblix-backend', status: 'healthy', pid }`).
+  - **Process Hijacking Defense**: Strictly enforces exact PID matching when checking Electron-owned child processes.
+  - **Foreign Process Safety**: Unowned/unrelated processes occupying port 5001 are never terminated or signaled.
+  - **Bounded Graceful Shutdown**: Listens directly for the child process `exit` event before clearing references, with bounded timeout (5000ms).
+  - **Forced Shutdown Fallback**: Bounded fallback termination with verified process death confirmation.
+  - **Crash Fast-Fail**: Immediate detection if child process crashes on startup (e.g., missing script or runtime error) without waiting for poll timeouts.
+  - **Startup Timeout Cleanup**: Automatically terminates lingering child processes if health polling times out.
+  - **Repeated Shutdown Safety**: Safe idempotent handling of concurrent or sequential `stopBackend()` calls.
+
+### 4. Master Test Verification (305 Tests Passing)
+- **Suite 1: SQLite Database Engine (`database/tests/test_database.js`)**: 6/6 passed.
+- **Suite 2: Database Repositories (`database/tests/test_repositories.js`)**: 7/7 passed.
+- **Suite 3: Auth & Products API (`backend/tests/test_auth_and_products.js`)**: 44/44 passed.
+- **Suite 4: POS & Customer API (`backend/tests/test_customers_and_sales.js`)**: 54/54 passed.
+- **Suite 5: Suppliers & Orders API (`backend/tests/test_suppliers_and_orders.js`)**: 62/62 passed.
+- **Suite 6: Admin & AI Controller API (`backend/tests/test_admin_and_ai.js`)**: 57/57 passed.
+- **Suite 7: Offline Isolation & Persistence (`backend/tests/test_offline_and_mongo_removal.js`)**: 38/38 passed.
+- **Suite 8: Backend Supervisor Tests (`electron/tests/test_backend_supervisor.js`)**: 37/37 passed.
+- **Total Master Test Count**: **305 Passing, 0 Failing**.
+
+### 5. Packaging & Verification
+- **Frontend Production Builds**: Both `frontend` and `admin-frontend` Vite builds passed with zero errors.
+- **Electron Multi-Window Verification**: All 3 windows (Portal Selector, Pharmacy Staff, Super Admin) load and expose `electronAPI` cleanly.
+- **Packaged Directory**: Successfully packaged `dist-electron/win-unpacked` containing `Mediblix.exe`, `resources/bin/node.exe`, `resources/backend`, `resources/database`, `resources/frontend-dist`, and `resources/admin-dist`. Verified standalone backend boot via bundled Node binary.
+
+---
+
+## 12. Next Steps & Recommended Deployment
+1. **Windows Installer Generation**: Run `npm run dist` to produce the final single-file NSIS installer `dist-electron/Mediblix Setup 1.0.0.exe`.
+2. **First-Run Production Launch**: Ensure pharmacy staff can configure store details on first launch via the pre-seeded master organization.

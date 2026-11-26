@@ -8,6 +8,7 @@ import AddProductDrawer from '../components/Inventory/AddProductDrawer';
 import ExportModal from '../components/Inventory/ExportModal';
 import ImportHistoryDrawer from '../components/Inventory/ImportHistoryDrawer';
 import AddProductChoiceModal from '../components/Inventory/AddProductChoiceModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const Inventory = () => {
   const [products, setProducts] = useState([]);
@@ -20,6 +21,7 @@ const Inventory = () => {
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [isChoiceModalOpen, setIsChoiceModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
   const menuRef = useRef(null);
   const navigate = useNavigate();
 
@@ -52,15 +54,35 @@ const Inventory = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this product?")) {
-      try {
-        await productService.deleteProduct(id);
-        fetchProducts();
-      } catch (error) {
-        console.error("Failed to delete product", error);
-      }
+  const handleDelete = (id) => {
+    setDeleteTargetId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    try {
+      await productService.deleteProduct(deleteTargetId);
+      setDeleteTargetId(null);
+      fetchProducts();
+    } catch (error) {
+      console.error("Failed to delete product", error);
+      setDeleteTargetId(null);
     }
+  };
+
+  const getExpiryBadge = (expiryDate) => {
+    if (!expiryDate) return { label: 'N/A', className: 'text-[var(--text-secondary)]' };
+    const exp = new Date(expiryDate);
+    const now = new Date();
+    const diffDays = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+    const formatted = exp.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (diffDays < 0) {
+      return { label: `${formatted} (Expired)`, className: 'px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700' };
+    }
+    if (diffDays <= 30) {
+      return { label: `${formatted} (${diffDays}d)`, className: 'px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700' };
+    }
+    return { label: formatted, className: 'text-emerald-700 font-medium' };
   };
 
   // CHANGED: now builds a payload in the exact same {title, columns, rows, summaryMetrics}
@@ -254,7 +276,24 @@ const Inventory = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredProducts.map((product, index) => (
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="p-12 text-center">
+                      <div className="flex flex-col items-center gap-3 text-[var(--text-secondary)]">
+                        <Package size={36} className="opacity-40" />
+                        <p className="font-medium text-[var(--text-primary)]">No products found</p>
+                        <p className="text-sm">Try adjusting your search/category filter or add a new product.</p>
+                        <button
+                          onClick={() => setIsChoiceModalOpen(true)}
+                          className="mt-1 inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-xl text-sm font-medium hover:opacity-90 cursor-pointer"
+                        >
+                          <Plus size={16} />
+                          Add Product
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredProducts.map((product, index) => (
                   <tr
                     key={product._id}
                     onClick={() => navigate(`/product/${product._id}`)}
@@ -282,8 +321,11 @@ const Inventory = () => {
                     <td className="p-4 text-[var(--text-secondary)] text-sm font-sans">
                       {product.mfgDate ? new Date(product.mfgDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                     </td>
-                    <td className="p-4 text-[var(--text-secondary)] text-sm font-sans">
-                      {product.expiryDate ? new Date(product.expiryDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                    <td className="p-4 text-sm font-sans">
+                      {(() => {
+                        const badge = getExpiryBadge(product.expiryDate);
+                        return <span className={badge.className}>{badge.label}</span>;
+                      })()}
                     </td>
                     <td className="p-4 font-semibold text-[var(--text-primary)]">{formatStock(product.quantity, 1)}</td>
                     <td className="p-4 font-semibold text-[var(--text-primary)]">₹{product.price.toLocaleString('en-IN')}</td>
@@ -394,6 +436,15 @@ const Inventory = () => {
         isOpen={isChoiceModalOpen}
         onClose={() => setIsChoiceModalOpen(false)}
         onManualSelect={() => setIsAddDrawerOpen(true)}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTargetId)}
+        title="Delete Product"
+        message="Are you sure you want to permanently delete this product from inventory?"
+        confirmLabel="Delete Product"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTargetId(null)}
       />
     </div>
   );
