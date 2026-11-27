@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useDevice } from '../context/DeviceContext';
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, Boxes, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, Settings, Boxes, FileSpreadsheet, Receipt } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
 
 const Navbar = () => {
@@ -13,6 +13,7 @@ const Navbar = () => {
     { path: '/stock', label: 'Dashboard', icon: Boxes, isPrimary: true },
     { path: '/audits', label: 'Audits & Reports', icon: FileSpreadsheet },
     { path: '/inventory', label: 'Inventory', icon: Package },
+    { path: '/billing', label: 'Sales', icon: Receipt },
   ];
 
   const rightNavItems = [

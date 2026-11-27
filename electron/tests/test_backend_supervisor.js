@@ -192,8 +192,55 @@ async function runSupervisorTests() {
   console.log("\n[Test 6: Bounded Forced Shutdown (SIGKILL Fallback)]");
   resetSupervisorState();
 
-  // Child process that ignores SIGTERM
-  const stubbornChild = spawn(nodeBin, ['-e', 'process.on("SIGTERM", () => {/* ignore */}); setInterval(() => {}, 1000);'], { stdio: 'pipe' });
+  // Child process that ignores SIGTERM but signals readiness after handler is installed
+  const stubbornChild = spawn(nodeBin, ['-e', "process.on('SIGTERM',()=>{/* ignore */}); console.log('READY'); setInterval(()=>{}, 1000);"], { stdio: 'pipe' });
+  // Wait for READY marker with full safety:
+  //   - missing stdout → SIGKILL + confirmed exit wait + reject (never silently skipped)
+  //   - timeout, child error, premature exit → all reject
+  //   - on rejection: SIGKILL sent, confirmed exit awaited (bounded 3 s), cleanup timer cleared on exit
+  //   - all listeners and timers cleaned up in every path; child.killed NOT used as exit proof
+  await new Promise((resolve, reject) => {
+    if (!stubbornChild.stdout) {
+      // No stdout: kill child, wait for confirmed OS exit (bounded), then reject
+      let cleanupTimer = null;
+      const doReject = () => {
+        clearTimeout(cleanupTimer);
+        reject(new Error('Stubborn child spawned without stdout — cannot wait for READY'));
+      };
+      if (stubbornChild.exitCode !== null) { doReject(); return; }
+      stubbornChild.once('exit', doReject);
+      cleanupTimer = setTimeout(doReject, 3000);
+      try { stubbornChild.kill('SIGKILL'); } catch {}
+      return;
+    }
+    let done = false;
+    const finish = (err) => {
+      if (done) return;
+      done = true;
+      clearTimeout(readyTimer);
+      stubbornChild.stdout.removeListener('data', onData);
+      stubbornChild.removeListener('error', onError);
+      stubbornChild.removeListener('exit', onExit);
+      if (err) {
+        // Kill child, wait for confirmed OS exit (bounded), clear timer on exit, then reject
+        if (stubbornChild.exitCode !== null) { reject(err); return; }
+        let cleanupTimer = null;
+        const doReject = () => { clearTimeout(cleanupTimer); reject(err); };
+        stubbornChild.once('exit', doReject);
+        cleanupTimer = setTimeout(doReject, 3000);
+        try { stubbornChild.kill('SIGKILL'); } catch {}
+      } else {
+        resolve();
+      }
+    };
+    const onData = (d) => { if (d.toString().includes('READY')) finish(null); };
+    const onError = (e) => finish(new Error(`Stubborn child error before READY: ${e.message}`));
+    const onExit = (code, sig) => finish(new Error(`Stubborn child exited before READY (code=${code}, signal=${sig})`));
+    const readyTimer = setTimeout(() => finish(new Error('Stubborn child did not emit READY within 3000ms')), 3000);
+    stubbornChild.stdout.on('data', onData);
+    stubbornChild.on('error', onError);
+    stubbornChild.on('exit', onExit);
+  });
   setOwnedChildForTesting(stubbornChild);
   const stubbornPid = stubbornChild.pid;
 

@@ -21,6 +21,7 @@ const {
   isSpawnedByElectron,
   getBackendChild
 } = require('./backend-supervisor');
+const { startOllama, stopOllama } = require('./ai-supervisor');
 const { getCanonicalDbPath, getInitialCredentialsPath } = require('../database/paths');
 
 // ─── Environment ──────────────────────────────────────────────────────────────
@@ -329,6 +330,12 @@ app.whenReady().then(async () => {
   setupIPC();
 
   try {
+    try {
+      await startOllama({ resourcesPath: app.isPackaged ? process.resourcesPath : null });
+    } catch (aiErr) {
+      console.warn('[Electron] Non-blocking AI supervisor start notice:', aiErr.message);
+    }
+
     await startBackend();
     checkAndNotifyFirstRunCredentials();
 
@@ -370,7 +377,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
-  await stopBackend();
+  await Promise.allSettled([stopBackend(), stopOllama()]);
   app.quit();
 });
 
@@ -380,13 +387,13 @@ app.on('before-quit', async (e) => {
     e.preventDefault();
     isQuitting = true;
     console.log('[Electron] before-quit: Waiting for graceful backend shutdown...');
-    await stopBackend();
+    await Promise.allSettled([stopBackend(), stopOllama()]);
     app.quit();
   }
 });
 
 app.on('will-quit', async () => {
-  await stopBackend();
+  await Promise.allSettled([stopBackend(), stopOllama()]);
 });
 
 // Security: Prevent new windows from being opened via links

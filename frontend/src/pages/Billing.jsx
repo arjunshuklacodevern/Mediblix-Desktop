@@ -29,6 +29,9 @@ const Billing = () => {
   const scanModalRef = useRef(null);
   const billingModalRef = useRef(null);
 
+  // Inline quantity editing: { id: productId, value: draftString }
+  const [qtyEdit, setQtyEdit] = useState(null);
+
   const [customerBills, setCustomerBills] = useState([]);
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
@@ -914,6 +917,26 @@ const Billing = () => {
     }).filter(item => item.quantity > 0));
   };
 
+  // Commit a manually-typed quantity value for a cart item
+  const commitQtyEdit = (productId) => {
+    if (!qtyEdit || qtyEdit.id !== productId) return;
+    const parsed = parseInt(qtyEdit.value, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      const originalProduct = products.find(p => p._id === productId);
+      setCart(cart.map(item => {
+        if (item._id === productId) {
+          if (originalProduct && parsed > originalProduct.quantity) {
+            showToast(`Insufficient stock available for ${item.name}`, 'error');
+            return item;
+          }
+          return { ...item, quantity: parsed };
+        }
+        return item;
+      }));
+    }
+    setQtyEdit(null);
+  };
+
   const removeFromCart = (productId) => {
     setCart(cart.filter(item => item._id !== productId));
   };
@@ -1466,7 +1489,30 @@ const Billing = () => {
                                 >
                                   <Minus size={10} />
                                 </button>
-                                <span className="w-6 text-center text-xs font-bold">{item.quantity}</span>
+                                {qtyEdit && qtyEdit.id === item._id ? (
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={qtyEdit.value}
+                                    autoFocus
+                                    onChange={(e) => setQtyEdit({ id: item._id, value: e.target.value })}
+                                    onBlur={() => commitQtyEdit(item._id)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') commitQtyEdit(item._id);
+                                      if (e.key === 'Escape') setQtyEdit(null);
+                                    }}
+                                    className="w-10 text-center text-xs font-bold bg-white border border-blue-400 rounded outline-none focus:ring-1 focus:ring-blue-400 py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  />
+                                ) : (
+                                  <span
+                                    className="w-6 text-center text-xs font-bold cursor-text hover:bg-white rounded transition-all px-0.5"
+                                    title="Click to type quantity"
+                                    onClick={() => setQtyEdit({ id: item._id, value: String(item.quantity) })}
+                                  >
+                                    {item.quantity}
+                                  </span>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => updateQuantity(item._id, 1)}

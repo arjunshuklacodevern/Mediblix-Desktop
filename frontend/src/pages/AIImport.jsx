@@ -585,8 +585,11 @@ const AIImport = () => {
               <ArrowLeft size={18} />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-[var(--text-primary)]">
+              <h1 className="text-3xl font-bold text-[var(--text-primary)] flex items-center gap-3">
                 {importType === "purchase-order" ? "AI Purchase Order Import" : "AI Product Import"}
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
+                  ● Offline AI (Local)
+                </span>
               </h1>
               <p className="text-[var(--text-secondary)] mt-1">
                 Upload invoice sheets or files to parse items using artificial intelligence

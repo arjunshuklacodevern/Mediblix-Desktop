@@ -250,7 +250,12 @@ const ChatWindow = ({ onClose }) => {
           <span style={{ fontSize: '20px' }}>🏥</span>
         </div>
         <div className="medagent-header-info">
-          <div className="medagent-header-title">Mediblix MedAgent</div>
+          <div className="medagent-header-title flex items-center gap-2">
+            Mediblix MedAgent
+            <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '12px', background: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', border: '1px solid rgba(34, 197, 94, 0.3)', fontWeight: '600' }}>
+              ● Local AI (Offline)
+            </span>
+          </div>
           <div className="medagent-header-subtitle">Your AI Pharmacy Assistant</div>
         </div>
         <div className="medagent-header-actions">

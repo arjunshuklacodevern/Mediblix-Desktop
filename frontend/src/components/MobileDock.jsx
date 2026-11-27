@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useDevice } from '../context/DeviceContext';
-import { LayoutDashboard, Package, ShoppingCart, Users, Settings, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, Settings, FileSpreadsheet, Receipt } from 'lucide-react';
 
 const MobileDock = () => {
   const { isMobile } = useDevice();
@@ -12,6 +12,7 @@ const MobileDock = () => {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/audits', icon: FileSpreadsheet, label: 'Audits' },
     { path: '/inventory', icon: Package, label: 'Inventory' },
+    { path: '/billing', icon: Receipt, label: 'Sales' },
     { path: '/orders', icon: ShoppingCart, label: 'Orders' },
     { path: '/customers', icon: Users, label: 'Customers' },
     { path: '/settings', icon: Settings, label: 'Settings' },

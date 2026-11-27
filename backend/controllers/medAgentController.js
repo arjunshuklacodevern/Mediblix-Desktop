@@ -8,66 +8,26 @@ import {
   APP_GUIDE_KNOWLEDGE,
   GENERAL_CHAT_PROMPT,
 } from "../utils/medAgentPrompts.js";
+import {
+  callAI,
+  detectMedicalEmergency,
+  extractJSON,
+} from "../services/aiProvider.js";
 
 const { getDatabase, productRepository } = repositories;
 
 // ─────────────────────────────────────────────────
-// Helper: Call Gemini API
+// Helper: Call AI (Routes to Local Ollama or Cloud Gemini)
 // ─────────────────────────────────────────────────
-const callGemini = async (prompt, systemPrompt = "") => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Gemini API Key is not configured");
-  }
-
-  const parts = [];
-  if (systemPrompt) {
-    parts.push({ text: systemPrompt });
-  }
-  parts.push({ text: prompt });
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts }],
-      }),
-    }
-  );
-
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(data.error.message || "Gemini API error");
-  }
-
-  let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("No response from AI");
-  }
-
-  return text;
+const callModel = async (prompt, systemPrompt = "") => {
+  return await callAI(prompt, systemPrompt);
 };
 
 // ─────────────────────────────────────────────────
-// Helper: Parse JSON from Gemini response
+// Helper: Parse JSON from AI response
 // ─────────────────────────────────────────────────
-const parseGeminiJSON = (text) => {
-  let cleaned = text.replace(/```json/gi, "").replace(/```/gi, "").trim();
-
-  const objStart = cleaned.indexOf("{");
-  const objEnd = cleaned.lastIndexOf("}");
-  const arrStart = cleaned.indexOf("[");
-  const arrEnd = cleaned.lastIndexOf("]");
-
-  if (objStart !== -1 && objEnd > objStart && (arrStart === -1 || objStart < arrStart)) {
-    cleaned = cleaned.substring(objStart, objEnd + 1);
-  } else if (arrStart !== -1 && arrEnd > arrStart) {
-    cleaned = cleaned.substring(arrStart, arrEnd + 1);
-  }
-
-  return JSON.parse(cleaned);
+const parseModelJSON = (text) => {
+  return extractJSON(text);
 };
 
 // ─────────────────────────────────────────────────
@@ -200,10 +160,25 @@ const handleChat = async (req, res) => {
     const orgInternalId = repositories.organizationRepository.findById(orgId)?.id;
     const db = getDatabase();
 
+    // LAYER 1: Hardcoded Deterministic Medical Emergency Check (Zero AI Dependency)
+    const emergency = detectMedicalEmergency(message);
+    if (emergency && emergency.isEmergency) {
+      return res.json({
+        type: "medicine_suggestion",
+        condition: "Emergency Medical Attention Required",
+        severity: "severe",
+        doctorConsultRequired: true,
+        message: `⚠️ URGENT MEDICAL WARNING: Symptoms indicating ${emergency.keyword} require immediate professional medical attention. Please advise the customer to seek emergency care.`,
+        medicines: [],
+        alternatives: [],
+        generalAdvice: "Do not attempt counter dispensing or self-medication for emergency conditions. Please contact emergency services or proceed to the nearest hospital.",
+      });
+    }
+
     // Step 1: Classify intent
     const intentPrompt = INTENT_CLASSIFIER_PROMPT.replace("{MESSAGE}", message);
-    const intentRaw = await callGemini(intentPrompt);
-    const intent = intentRaw.trim().toLowerCase().replace(/[^a-z_]/g, "");
+    const intentRaw = await callModel(intentPrompt);
+    const intent = (intentRaw || "").trim().toLowerCase().replace(/[^a-z_]/g, "");
 
     // Step 2: Route based on intent
     if (intent === "symptom_query") {
@@ -219,13 +194,18 @@ const handleChat = async (req, res) => {
         .replace("{CATEGORIES}", categoryList)
         .replace("{SYMPTOMS}", message);
 
-      const aiResponse = await callGemini(prompt, SYSTEM_PROMPT);
-      const parsed = parseGeminiJSON(aiResponse);
+      const aiResponse = await callModel(prompt, SYSTEM_PROMPT);
+      const parsed = parseModelJSON(aiResponse) || {};
+
+      // Deterministic Safety Validation on Model Output:
+      // If severity is severe or doctor consultation indicated, enforce doctorConsultRequired
+      const isSevere = parsed.severity === "severe" || parsed.doctorConsultRequired === true;
+      const requiresConsult = isSevere || parsed.doctorConsultRequired === true;
 
       let medicines = [];
       let alternatives = [];
 
-      if (parsed.medicines && parsed.medicines.length > 0) {
+      if (!requiresConsult && parsed.medicines && parsed.medicines.length > 0) {
         medicines = crossReferenceInventory(parsed.medicines, orgId);
 
         const outOfStock = medicines.filter(
@@ -256,11 +236,11 @@ const handleChat = async (req, res) => {
       return res.json({
         type: "medicine_suggestion",
         condition: parsed.condition || "General symptoms",
-        severity: parsed.severity || "mild",
-        doctorConsultRequired: parsed.doctorConsultRequired || false,
-        message: parsed.doctorConsultRequired
-          ? "⚠️ These symptoms may require immediate medical attention. Please advise the customer to consult a doctor."
-          : `Based on the symptoms, this may be associated with ${parsed.condition}. Here are the recommended medicines:`,
+        severity: parsed.severity || (requiresConsult ? "severe" : "mild"),
+        doctorConsultRequired: requiresConsult,
+        message: requiresConsult
+          ? "⚠️ These symptoms may require immediate medical attention. Please advise the customer to consult a qualified doctor before taking any medication."
+          : `Based on the symptoms, this may be associated with ${parsed.condition || "reported condition"}. Here are suggested over-the-counter options:`,
         medicines,
         alternatives,
         generalAdvice: parsed.generalAdvice || "",
@@ -269,7 +249,7 @@ const handleChat = async (req, res) => {
 
     if (intent === "alternative_request") {
       const prompt = `From the following user message, extract the medicine name they are asking an alternative for. Return ONLY the medicine name, nothing else.\n\nUser message: "${message}"`;
-      const medicineName = (await callGemini(prompt)).trim();
+      const medicineName = ((await callModel(prompt)) || "").trim();
 
       const matchedProducts = productRepository.search(medicineName, orgId);
       const product = matchedProducts[0] || null;
@@ -287,8 +267,8 @@ const handleChat = async (req, res) => {
 
         let rankedAlts = alts;
         try {
-          const rankResponse = await callGemini(rankPrompt, SYSTEM_PROMPT);
-          const ranking = parseGeminiJSON(rankResponse);
+          const rankResponse = await callModel(rankPrompt, SYSTEM_PROMPT);
+          const ranking = parseModelJSON(rankResponse);
 
           if (Array.isArray(ranking) && ranking.length > 0) {
             rankedAlts = ranking
@@ -340,8 +320,8 @@ const handleChat = async (req, res) => {
 
     if (intent === "app_guidance") {
       const prompt = APP_GUIDE_KNOWLEDGE.replace("{QUESTION}", message);
-      const aiResponse = await callGemini(prompt);
-      const parsed = parseGeminiJSON(aiResponse);
+      const aiResponse = await callModel(prompt);
+      const parsed = parseModelJSON(aiResponse) || {};
 
       return res.json({
         type: "app_guidance",
@@ -354,8 +334,8 @@ const handleChat = async (req, res) => {
 
     // General chat
     const prompt = GENERAL_CHAT_PROMPT.replace("{MESSAGE}", message);
-    const aiResponse = await callGemini(prompt);
-    const parsed = parseGeminiJSON(aiResponse);
+    const aiResponse = await callModel(prompt);
+    const parsed = parseModelJSON(aiResponse) || {};
 
     return res.json({
       type: "general",
@@ -368,7 +348,7 @@ const handleChat = async (req, res) => {
     res.status(500).json({
       type: "error",
       message:
-        "I'm having trouble processing that right now. Please try again in a moment, or browse the Inventory page directly to find medicines.",
+        `I'm having trouble processing that right now: ${error.message}. Please browse the Inventory page directly to find medicines.`,
     });
   }
 };
