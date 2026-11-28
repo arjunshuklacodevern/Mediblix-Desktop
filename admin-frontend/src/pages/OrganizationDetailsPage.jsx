@@ -579,21 +579,13 @@ const OrganizationDetailsPage = () => {
             </div>
             <div className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-emerald-100 shadow-xs">
               <span className="font-mono text-base font-bold text-gray-900 select-all">
-                {orgAdmin?.lastPassword || "••••••••••••"}
+                ••••••••••••
               </span>
-              {orgAdmin?.lastPassword && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(orgAdmin.lastPassword);
-                    alert("Active PIN copied to clipboard!");
-                  }}
-                  className="text-xs text-emerald-700 hover:text-emerald-900 font-semibold cursor-pointer"
-                >
-                  Copy PIN
-                </button>
-              )}
+              <span className="text-[11px] text-gray-500 font-medium">Hashed — not retrievable</span>
             </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Passwords are stored as bcrypt hashes only. Use "Generate New PIN" to issue a new one.
+            </p>
             <p className="text-[11px] text-gray-500 mt-2">
               Security Session Version: <span className="font-mono font-bold text-gray-800">v{orgAdmin?.sessionVersion || 1}</span> • Active terminals authenticate with this version.
             </p>
@@ -622,8 +614,8 @@ const OrganizationDetailsPage = () => {
                     className="p-2.5 bg-white border border-gray-100 rounded-xl flex items-center justify-between text-xs"
                   >
                     <div>
-                      <p className="font-mono text-gray-400 line-through text-xs font-semibold">
-                        {item.pin}
+                      <p className="font-mono text-gray-400 text-xs font-semibold">
+                        {item.pin ? item.pin : "•••••• (not stored)"}
                       </p>
                       <p className="text-[10px] text-gray-400">
                         Deactivated on {new Date(item.deactivatedAt).toLocaleString("en-IN")}

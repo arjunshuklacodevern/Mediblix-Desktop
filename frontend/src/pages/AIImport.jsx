@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Upload, FileText, Sparkles, Plus, Trash2, Check, AlertCircle, Minimize2, Maximize2, Undo2, Redo2, X, Mic, Volume2, Play, Pause, StopCircle } from "lucide-react";
 import aiService from "../services/aiService";
+import AIProviderBadge from "../components/AIProviderBadge";
+import LocalAISetup from "../components/LocalAISetup";
 import productService from "../services/productService";
 import importHistoryService from "../services/importHistoryService";
 import purchaseOrderService from "../services/purchaseOrderService";
@@ -566,7 +568,7 @@ const AIImport = () => {
   const summary = getSummary();
   const stepsText = [
     "Reading File Data...",
-    "Connecting To Gemini AI...",
+    "Connecting To AI Engine...",
     "Extracting Text Content...",
     "Identifying Items And Prices...",
     "Structuring Product Details..."
@@ -594,24 +596,27 @@ const AIImport = () => {
             </div>
           </div>
 
-          {items.length > 0 && (
-            <div className="flex items-center gap-2">
-              <button
-                disabled={historyIndex <= 0}
-                onClick={handleUndo}
-                className="p-2.5 bg-white border border-[var(--border-soft)] rounded-xl hover:border-[var(--accent)] text-[var(--text-primary)] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Undo2 size={18} />
-              </button>
-              <button
-                disabled={historyIndex >= history.length - 1}
-                onClick={handleRedo}
-                className="p-2.5 bg-white border border-[var(--border-soft)] rounded-xl hover:border-[var(--accent)] text-[var(--text-primary)] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <Redo2 size={18} />
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <AIProviderBadge />
+            {items.length > 0 && (
+              <>
+                <button
+                  disabled={historyIndex <= 0}
+                  onClick={handleUndo}
+                  className="p-2.5 bg-white border border-[var(--border-soft)] rounded-xl hover:border-[var(--accent)] text-[var(--text-primary)] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Undo2 size={18} />
+                </button>
+                <button
+                  disabled={historyIndex >= history.length - 1}
+                  onClick={handleRedo}
+                  className="p-2.5 bg-white border border-[var(--border-soft)] rounded-xl hover:border-[var(--accent)] text-[var(--text-primary)] transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Redo2 size={18} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {error && (
@@ -620,6 +625,8 @@ const AIImport = () => {
             <span className="text-sm font-medium">{error}</span>
           </div>
         )}
+
+        {items.length === 0 && !analyzing && !backgroundAnalyzing && <LocalAISetup />}
 
         {items.length === 0 && !analyzing && !backgroundAnalyzing ? (
           <div className="grid grid-cols-1 gap-4">

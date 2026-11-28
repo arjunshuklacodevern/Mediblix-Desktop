@@ -37,6 +37,14 @@ try {
 }
 
 const { CURRENT_SCHEMA_VERSION, MIGRATIONS } = require('./schema');
+
+// True only when THIS process provisioned the initial superadmin. The Electron
+// first-run notice keys off this, so an ordinary launch never replays it.
+let provisionedSuperadminThisLaunch = false;
+
+function wasSuperadminProvisionedThisLaunch() {
+  return provisionedSuperadminThisLaunch;
+}
 const { getCanonicalDbPath, ensureDbDirExists, getCanonicalDbDir, getInitialCredentialsPath } = require('./paths');
 
 let dbInstance = null;
@@ -121,6 +129,7 @@ function seedDefaults(db) {
   let superadmin = db.prepare('SELECT * FROM users WHERE role = ?').get('superadmin') ||
                    db.prepare('SELECT * FROM users WHERE email = ?').get(adminEmail);
   if (!superadmin) {
+    provisionedSuperadminThisLaunch = true;
     if (!adminPassword) {
       isNewProvision = true;
       adminPassword = crypto.randomBytes(9).toString('base64url'); // 12-char secure unique random password
@@ -145,28 +154,42 @@ function seedDefaults(db) {
     console.log('[DB] Seeded initial superadmin:', adminEmail);
 
     if (isNewProvision) {
-      try {
-        const credPath = getInitialCredentialsPath();
-        const content = [
-          '===================================================================',
-          'Mediblix Desktop — Initial Super Admin Credentials',
-          '===================================================================',
-          'A unique, secure administrator account was provisioned for this system.',
-          '',
-          `Email:    ${adminEmail}`,
-          `Password: ${adminPassword}`,
-          '',
-          'SECURITY NOTICE:',
-          '- These one-time credentials were generated on first launch.',
-          '- Please log in to the Super Admin Portal and update your password.',
-          '- Once noted down, securely delete this file.',
-          '===================================================================',
-          ''
-        ].join('\r\n');
-        fs.writeFileSync(credPath, content, { encoding: 'utf8' });
-        console.log('[DB] Secure initial credentials file written to:', credPath);
-      } catch (fileErr) {
-        console.error('[DB] Failed to write initial credentials file:', fileErr.message);
+      // Only a real installation (the default AppData database) gets the
+      // one-time onboarding file. Test or isolated databases must never write
+      // a credential into the user's real AppData directory.
+      const activeDbPath = typeof db.name === 'string' ? db.name : '';
+      const defaultDbPath = path.join(getCanonicalDbDir(), 'mediblix.db');
+      const isDefaultInstall =
+        activeDbPath !== '' &&
+        activeDbPath !== ':memory:' &&
+        path.resolve(activeDbPath) === path.resolve(defaultDbPath);
+
+      if (!isDefaultInstall) {
+        console.log('[DB] Skipping initial credentials file for isolated database:', activeDbPath || '(unknown)');
+      } else {
+        try {
+          const credPath = getInitialCredentialsPath();
+          const content = [
+            '===================================================================',
+            'Mediblix Desktop — Initial Super Admin Credentials',
+            '===================================================================',
+            'A unique, secure administrator account was provisioned for this system.',
+            '',
+            `Email:    ${adminEmail}`,
+            `Password: ${adminPassword}`,
+            '',
+            'SECURITY NOTICE:',
+            '- These one-time credentials were generated on first launch.',
+            '- Please log in to the Super Admin Portal and update your password.',
+            '- Once noted down, securely delete this file.',
+            '===================================================================',
+            ''
+          ].join('\r\n');
+          fs.writeFileSync(credPath, content, { encoding: 'utf8' });
+          console.log('[DB] Secure initial credentials file written to:', credPath);
+        } catch (fileErr) {
+          console.error('[DB] Failed to write initial credentials file:', fileErr.message);
+        }
       }
     }
   }
@@ -270,7 +293,9 @@ function initDatabase(customPath) {
   // Run migrations
   applyMigrations(db);
 
-  // Seed baseline records if needed
+  // Seed baseline records if needed. The provisioning flag describes this
+  // initialisation only, so it is reset before seeding runs.
+  provisionedSuperadminThisLaunch = false;
   seedDefaults(db);
 
   dbInstance = db;
@@ -319,6 +344,7 @@ module.exports = {
   runInTransaction,
   generateId,
   seedDefaults,
+  wasSuperadminProvisionedThisLaunch,
   getDefaultDbPath,
   getCanonicalDbPath,
   getCanonicalDbDir,

@@ -127,7 +127,8 @@ const getOrganizations = asyncHandler(async (req, res) => {
       activeDeviceName: orgAdmin?.activeDeviceInfo?.deviceName || null,
       hasActiveSession: !!orgAdmin?.activeSessionKey,
       conflictAttemptsCount: orgAdmin?.conflictAttemptsCount || 0,
-      lastPassword: orgAdmin?.lastPassword || null,
+      // Credentials are hash-only at rest; a recoverable PIN is never exposed.
+      lastPassword: null,
       passwordHistory: orgAdmin?.passwordHistory || [],
     };
   });
@@ -262,9 +263,6 @@ const createOrganization = asyncHandler(async (req, res) => {
     isAdmin: true,
     organization: org._id,
   });
-
-  // Set last_password field for admin credentials display
-  db.prepare("UPDATE users SET last_password = ? WHERE id = ?").run(initialPassword, orgAdmin.id);
 
   res.status(201).json({
     message: "Organization created successfully",
@@ -420,7 +418,9 @@ const resetOrgPassword = asyncHandler(async (req, res) => {
       password: generatedPassword,
     },
     previousCredentials: {
-      password: result.previousPin,
+      // The previous credential is archived as a hash only and cannot be shown.
+      password: null,
+      recoverable: false,
       status: "Disabled",
     },
     passwordHistory: result.passwordHistory,

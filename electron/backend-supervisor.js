@@ -25,7 +25,12 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const { getOrCreateJwtSecret } = require('../database/paths');
+// `database/` ships as an extra resource (outside app.asar), so a packaged app
+// must load it from resourcesPath instead of through the asar bundle.
+const { getOrCreateJwtSecret } =
+  process.resourcesPath && !process.defaultApp
+    ? require(path.join(process.resourcesPath, 'database', 'paths.js'))
+    : require('../database/paths');
 
 const DEFAULT_PORT = 5001;
 const DEFAULT_STARTUP_TIMEOUT_MS = 15000;
@@ -127,6 +132,8 @@ function checkBackendHealth(port = DEFAULT_PORT, expectedPid = null) {
             isMediblix: true,
             pid: json.pid,
             status: json.status,
+            // True only when this backend process provisioned the superadmin.
+            provisionedAdmin: json.provisionedAdmin === true,
           });
         } catch {
           resolve({
@@ -164,22 +171,46 @@ function checkBackendHealth(port = DEFAULT_PORT, expectedPid = null) {
  * 3. System host node binary (fallback)
  */
 function resolveNodeBinary(resourcesPath = null) {
+  const runtime = resolveNodeRuntime(resourcesPath);
+  if (runtime.bin) return runtime.bin;
+  return process.platform === 'win32' ? 'node.exe' : 'node';
+}
+
+/**
+ * Resolves the Node runtime for the backend child process.
+ *
+ * 1. A bundled node in resourcesPath/bin (Windows installer today)
+ * 2. Electron's own binary with ELECTRON_RUN_AS_NODE=1 — Electron embeds Node,
+ *    so a packaged app needs NO separate Node installation on the customer's
+ *    machine. This is what makes the macOS build self-contained.
+ * 3. Host node (development only)
+ *
+ * @returns {{bin: string|null, env: Object, source: string}}
+ */
+function resolveNodeRuntime(
+  resourcesPath = null,
+  { execPath = process.execPath, isElectron = Boolean(process.versions && process.versions.electron) } = {}
+) {
   const isWin = process.platform === 'win32';
   const nodeName = isWin ? 'node.exe' : 'node';
 
   if (resourcesPath) {
     const packagedNode = path.join(resourcesPath, 'bin', nodeName);
     if (fs.existsSync(packagedNode)) {
-      return packagedNode;
+      return { bin: packagedNode, env: {}, source: 'bundled' };
     }
+    if (isElectron && execPath) {
+      return { bin: execPath, env: { ELECTRON_RUN_AS_NODE: '1' }, source: 'electron' };
+    }
+    return { bin: null, env: {}, source: 'missing' };
   }
 
   const devNode = path.join(__dirname, '..', 'build', 'bin', nodeName);
   if (fs.existsSync(devNode)) {
-    return devNode;
+    return { bin: devNode, env: {}, source: 'bundled' };
   }
 
-  return isWin ? 'node.exe' : 'node';
+  return { bin: isWin ? 'node.exe' : 'node', env: {}, source: 'host' };
 }
 
 /**
@@ -197,14 +228,20 @@ function resolveNodeBinary(resourcesPath = null) {
  * @returns {Promise<{ port: number, pid: number, reused: boolean }>}
  */
 async function startBackend(options = {}) {
-  const port = options.port || DEFAULT_PORT;
+  const port = options.port || Number(process.env.PORT) || DEFAULT_PORT;
   const startupTimeoutMs = options.startupTimeoutMs || DEFAULT_STARTUP_TIMEOUT_MS;
   const pollIntervalMs = options.healthPollIntervalMs || DEFAULT_HEALTH_POLL_INTERVAL_MS;
   const shutdownTimeoutMs = options.shutdownTimeoutMs || DEFAULT_SHUTDOWN_TIMEOUT_MS;
-  const nodeBin = options.nodeBin || resolveNodeBinary();
+  const nodeRuntime = options.nodeBin
+    ? { bin: options.nodeBin, env: options.nodeEnv || {}, source: 'explicit' }
+    : resolveNodeRuntime(options.resourcesPath || null);
+  const nodeBin = nodeRuntime.bin;
   const backendScript = options.backendScript;
   const backendCwd = options.backendCwd || path.dirname(backendScript);
   const isDev = Boolean(options.isDev);
+  // Extra environment for the backend child (local AI control channel, model
+  // directory). Kept explicit so no caller can silently leak unrelated values.
+  const extraEnv = options.env || {};
 
   console.log(`[Supervisor] Checking status of port ${port}...`);
 
@@ -229,8 +266,14 @@ async function startBackend(options = {}) {
     }
   }
 
+  if (!nodeBin) {
+    throw new Error(
+      'No JavaScript runtime is available to start the Mediblix backend. Reinstall Mediblix.'
+    );
+  }
+
   // Step 2: Spawn backend using resolved Node runtime
-  console.log(`[Supervisor] Launching local Express backend with ${nodeBin} from: ${backendScript}`);
+  console.log(`[Supervisor] Launching local Express backend with ${nodeBin} (${nodeRuntime.source}) from: ${backendScript}`);
 
   let hasExitedPrematurely = false;
   let exitCode = null;
@@ -242,6 +285,8 @@ async function startBackend(options = {}) {
       cwd: backendCwd,
       env: {
         ...process.env,
+        ...nodeRuntime.env,
+        ...extraEnv,
         PORT: String(port),
         NODE_ENV: isDev ? 'development' : 'production',
         JWT_SECRET: getOrCreateJwtSecret()
@@ -439,6 +484,7 @@ module.exports = {
   isPortOccupied,
   checkBackendHealth,
   resolveNodeBinary,
+  resolveNodeRuntime,
   startBackend,
   stopBackend,
   getBackendChild,

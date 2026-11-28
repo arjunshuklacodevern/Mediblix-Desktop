@@ -27,7 +27,8 @@ const {
   isSpawnedByElectron,
   setOwnedChildForTesting,
   resetSupervisorState,
-  resolveNodeBinary
+  resolveNodeBinary,
+  resolveNodeRuntime
 } = require('../backend-supervisor');
 
 const { getCanonicalDbPath, getCanonicalDbDir } = require('../../database/paths');
@@ -52,6 +53,27 @@ async function runSupervisorTests() {
   console.log("==================================================");
 
   const nodeBin = resolveNodeBinary();
+
+  // ─── Test 1b: Packaged runtime needs no system Node ──────────
+  console.log("\n[Test 1b: Packaged JavaScript runtime]");
+  {
+    const missingDir = path.join(require('os').tmpdir(), `mediblix-no-node-${Date.now()}`);
+    const asElectron = resolveNodeRuntime(missingDir, {
+      execPath: '/Applications/Mediblix.app/Contents/MacOS/Mediblix',
+      isElectron: true,
+    });
+    assert(
+      asElectron.bin === '/Applications/Mediblix.app/Contents/MacOS/Mediblix' &&
+        asElectron.env.ELECTRON_RUN_AS_NODE === '1',
+      'a packaged app without a bundled node runs the backend on Electron itself'
+    );
+
+    const noRuntime = resolveNodeRuntime(missingDir, { isElectron: false });
+    assert(noRuntime.bin === null, 'no runtime is invented when none exists');
+
+    const dev = resolveNodeRuntime(null);
+    assert(Boolean(dev.bin) && dev.source !== 'missing', `development resolves a runtime (${dev.source})`);
+  }
 
   // ─── Test 1: Canonical Database Path Consistency ─────────────
   console.log("\n[Test 1: Canonical Database Path Consistency]");
@@ -192,8 +214,23 @@ async function runSupervisorTests() {
   console.log("\n[Test 6: Bounded Forced Shutdown (SIGKILL Fallback)]");
   resetSupervisorState();
 
-  // Child process that ignores SIGTERM
-  const stubbornChild = spawn(nodeBin, ['-e', 'process.on("SIGTERM", () => {/* ignore */}); setInterval(() => {}, 1000);'], { stdio: 'pipe' });
+  // Child process that ignores SIGTERM. It only announces readiness after the
+  // handler is installed: an immediate SIGTERM would otherwise kill it with the
+  // default action and the SIGKILL fallback would never be exercised.
+  const stubbornChild = spawn(
+    nodeBin,
+    ['-e', 'process.on("SIGTERM", () => {/* ignore */}); process.stdout.write("ready\\n"); setInterval(() => {}, 1000);'],
+    { stdio: 'pipe' }
+  );
+  await new Promise((resolve) => {
+    let buffered = '';
+    stubbornChild.stdout.on('data', (chunk) => {
+      buffered += chunk.toString();
+      if (buffered.includes('ready')) resolve();
+    });
+    stubbornChild.once('exit', resolve);
+  });
+
   setOwnedChildForTesting(stubbornChild);
   const stubbornPid = stubbornChild.pid;
 

@@ -5,6 +5,7 @@ import customerService from '../services/customerService';
 import saleService from '../services/saleService';
 import productService from '../services/productService';
 import aiService from '../services/aiService';
+import AIProviderBadge from '../components/AIProviderBadge';
 
 const Billing = () => {
   const [searchParams] = useSearchParams();
@@ -2315,6 +2316,7 @@ const Billing = () => {
               <div>
                 <h2 className="text-xl font-bold text-gray-900">AI Billing Assistant</h2>
                 <p className="text-sm text-gray-500 mt-0.5">Generate client invoices using document upload or audio voice dictations</p>
+                <AIProviderBadge className="mt-2" />
               </div>
               <button
                 type="button"

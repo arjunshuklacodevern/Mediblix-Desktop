@@ -15,6 +15,14 @@ try {
   }
 }
 
+/**
+ * A stored credential is only ever exposed as a bcrypt hash. `last_password`
+ * and archived history entries must never contain a recoverable secret.
+ */
+function isBcryptHash(value) {
+  return typeof value === 'string' && /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(value);
+}
+
 function mapRow(row) {
   if (!row) return null;
   return {
@@ -23,7 +31,6 @@ function mapRow(row) {
     name: row.name,
     email: row.email,
     password: row.password,
-    lastPassword: row.last_password,
     passwordHistory: JSON.parse(row.password_history || '[]'),
     role: row.role,
     isAdmin: Boolean(row.is_admin),
@@ -169,11 +176,16 @@ const userRepository = {
     const db = getDatabase();
     const now = new Date().toISOString();
 
-    const previousPin = user.lastPassword || "Previously Set Password";
-    const history = user.passwordHistory || [];
-    if (user.lastPassword) {
+    // Only the previous hash is retained: enough to prove a rotation happened,
+    // and useless to anyone who reads the database.
+    const previousHash = isBcryptHash(user.password) ? user.password : null;
+    const history = (user.passwordHistory || []).filter(
+      (entry) => entry && typeof entry === "object"
+    );
+    if (previousHash) {
       history.unshift({
-        pin: user.lastPassword,
+        pin: null,
+        hashed: true,
         deactivatedAt: now,
         status: "Disabled",
       });
@@ -181,7 +193,7 @@ const userRepository = {
     }
 
     let passwordHash = newPassword;
-    if (!passwordHash.startsWith("$2a$") && !passwordHash.startsWith("$2b$")) {
+    if (!isBcryptHash(passwordHash)) {
       const salt = bcrypt.genSaltSync(10);
       passwordHash = bcrypt.hashSync(passwordHash, salt);
     }
@@ -204,9 +216,9 @@ const userRepository = {
         device_access_logs = ?,
         updated_at = ?
       WHERE _id = ? OR id = ?
-    `).run(
+    `)    .run(
       passwordHash,
-      newPassword,
+      previousHash,
       JSON.stringify(history),
       newSessionVersion,
       JSON.stringify(logs),
@@ -217,7 +229,9 @@ const userRepository = {
 
     return {
       user: this.findById(userIdOrIdStr),
-      previousPin,
+      // No plaintext password is returned or archived any more.
+      previousPin: null,
+      previousPasswordRecoverable: false,
       passwordHistory: history,
     };
   },

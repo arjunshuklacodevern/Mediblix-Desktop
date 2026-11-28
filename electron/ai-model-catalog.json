@@ -1,0 +1,136 @@
+{
+  "catalogVersion": 2,
+  "defaultTier": "lite",
+  "runtime": {
+    "name": "llama.cpp",
+    "serverBinary": "llama-server",
+    "pinnedBuild": "b12803",
+    "license": "MIT",
+    "approximately_packaged_bytes": 87000000,
+    "ports": {
+      "text": 8791,
+      "vision": 8792
+    },
+    "platformAssets": {
+      "darwin-arm64": {
+        "archive": "llama-b12803-bin-macos-arm64.tar.gz",
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12803/llama-b12803-bin-macos-arm64.tar.gz",
+        "sha256": "a052d3f315ccc1ebd4a04f73c2e9c0ac1809dc878dcf26a979f43823feef5fa2",
+        "vendoredPath": "runtime/darwin-arm64",
+        "backend": "metal",
+        "vendored": true
+      },
+      "win32-x64": {
+        "archive": "llama-b12803-bin-win-cpu-x64.zip",
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12803/llama-b12803-bin-win-cpu-x64.zip",
+        "sha256": "c9d69aef51a6a66dd39036c62adfa5f857b4e0181ef3dd29972f6672e99fd63b",
+        "vendoredPath": "runtime/win32-x64",
+        "backend": "cpu",
+        "vendored": true
+      },
+      "darwin-x64": {
+        "archive": "llama-b12803-bin-macos-x64.tar.gz",
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12803/llama-b12803-bin-macos-x64.tar.gz",
+        "sha256": null,
+        "vendored": false,
+        "note": "Not vendored: the app itself does not ship an Intel macOS build yet."
+      },
+      "win32-arm64": {
+        "archive": "llama-b12803-bin-win-cpu-arm64.zip",
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12803/llama-b12803-bin-win-cpu-arm64.zip",
+        "sha256": null,
+        "vendored": false,
+        "note": "Not vendored: the backend binary and native modules are x64-only today."
+      }
+    }
+  },
+  "pipelines": {
+    "scan": {
+      "mode": "ocr",
+      "productionApproved": false,
+      "note": "OCR-to-text for scanned pages is implemented but stays opt-in until accuracy is signed off on real invoices. Enable with MEDIBLIX_SCAN_OCR=on.",
+      "ocr": {
+        "prompt": "OCR:",
+        "maxTokens": 2048,
+        "pageRetries": 1,
+        "maxPages": 5
+      }
+    }
+  },
+  "tiers": {
+    "lite": {
+      "id": "lite",
+      "label": "Lite",
+      "description": "Everyday laptops: 8 GB RAM, 4 CPU cores, no dedicated GPU.",
+      "requirements": {
+        "minRamBytes": 6442450944,
+        "recommendedRamBytes": 8589934592,
+        "freeDiskBytes": 3758096384,
+        "minCpuCores": 4
+      },
+      "runtimeProfile": {
+        "ctxSize": 4096,
+        "maxThreads": 4,
+        "gpuLayersByPlatform": {
+          "darwin-arm64": 99,
+          "win32-x64": 0
+        }
+      },
+      "models": {
+        "text": {
+          "id": "qwen3-1.7b-instruct-q4_k_m",
+          "kind": "text",
+          "capability": "text",
+          "displayName": "Mediblix Local Text 1.7B",
+          "family": "Qwen3-1.7B",
+          "license": "Apache-2.0",
+          "repo": "ggml-org/Qwen3-1.7B-GGUF",
+          "quantization": "Q4_K_M",
+          "ctxSize": 4096,
+          "gpuLayers": 99,
+          "approxRamBytes": 2100000000,
+          "rationale": "Runs in roughly 2 GB of RAM, leaving headroom on an 8 GB Windows laptop that is also running the browser and the app.",
+          "files": [
+            {
+              "name": "Qwen3-1.7B-Q4_K_M.gguf",
+              "role": "model",
+              "bytes": 1282439264,
+              "sha256": "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5",
+              "url": "https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf"
+            }
+          ]
+        },
+        "vision": {
+          "id": "paddleocr-vl-1.6-q4",
+          "kind": "vision",
+          "capability": "ocr",
+          "displayName": "Mediblix Local OCR 0.9B",
+          "family": "PaddleOCR-VL-1.6",
+          "license": "Apache-2.0",
+          "repo": "PaddlePaddle/PaddleOCR-VL-1.6-GGUF",
+          "quantization": "GGUF (vendor-supplied)",
+          "ctxSize": 4096,
+          "gpuLayers": 99,
+          "approxRamBytes": 2400000000,
+          "rationale": "A document-OCR specialist reads scanned pages far more reliably than a general 3B vision model, and the text model does the structured extraction — so the two never need to be resident together.",
+          "files": [
+            {
+              "name": "PaddleOCR-VL-1.6-GGUF.gguf",
+              "role": "model",
+              "bytes": 935769056,
+              "sha256": "f3ae46ec885050acf4b3d31944431e1fd90d50664fb09126af4a3c050ba14ee8",
+              "url": "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6-GGUF/resolve/main/PaddleOCR-VL-1.6-GGUF.gguf"
+            },
+            {
+              "name": "PaddleOCR-VL-1.6-GGUF-mmproj.gguf",
+              "role": "mmproj",
+              "bytes": 881770560,
+              "sha256": "204d757d7610d9b3faab10d506d69e5b244e32bf765e2bab2d0167e65e0a058a",
+              "url": "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6-GGUF/resolve/main/PaddleOCR-VL-1.6-GGUF-mmproj.gguf"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

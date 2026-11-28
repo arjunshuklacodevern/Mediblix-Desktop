@@ -4,7 +4,7 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
-import { initDatabase, closeDatabase } from "../database/db.js";
+import { initDatabase, closeDatabase, wasSuperadminProvisionedThisLaunch } from "../database/db.js";
 import productRoutes from "./routes/productRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import saleRoutes from "./routes/saleRoutes.js";
@@ -55,7 +55,16 @@ try {
 // 2. Initialize Express application
 const app = express();
 
-app.use(cors());
+// Expose the AI provider headers so the browser can show which model answered.
+app.use(
+  cors({
+    exposedHeaders: [
+      "X-Mediblix-AI-Provider",
+      "X-Mediblix-AI-Model",
+      "X-Mediblix-AI-Fallback",
+    ],
+  })
+);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -95,6 +104,8 @@ app.get("/api/health", (req, res) => {
     status: "healthy",
     database: "sqlite",
     mode: "local-first",
+    // Boolean only — never any credential material.
+    provisionedAdmin: wasSuperadminProvisionedThisLaunch(),
     pid: process.pid,
     timestamp: new Date().toISOString()
   });

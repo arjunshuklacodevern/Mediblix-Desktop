@@ -4,10 +4,23 @@ import { useNavigate } from 'react-router-dom';
 import medAgentService from '../../services/medAgentService';
 import MedicineCard, { AlternativeCard } from './MedicineCard';
 
+// Which engine answered the last message — shown under the title so staff know
+// whether the assistant is online (Gemini), offline (local model) or reading
+// local inventory data directly.
+const describeProvider = (response) => {
+  const provider = response?.provider;
+  if (provider === 'local') return response?.model ? `Offline AI · ${response.model}` : 'Offline AI';
+  if (provider === 'gemini') return 'Gemini';
+  if (provider === 'sqlite') return 'Inventory data';
+  if (provider === 'safety-gate') return 'Safety check';
+  return null;
+};
+
 const ChatWindow = ({ onClose }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [aiLabel, setAiLabel] = useState(null);
   const [isClosing, setIsClosing] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const messagesEndRef = useRef(null);
@@ -112,12 +125,19 @@ const ChatWindow = ({ onClose }) => {
         ...response,
         content: response.message
       }]);
+
+      const label = describeProvider(response);
+      if (label) setAiLabel(label);
     } catch (error) {
       setMessages(prev => [...prev, {
         id: messageId + 1,
         sender: 'agent',
         type: 'error',
-        content: "I'm having trouble connecting to the server. Please try again."
+        // Surface the backend's explanation (no AI available, offline limits,
+        // timed out) instead of a generic connection message.
+        content: error.response?.data?.message
+          || error.message
+          || "I'm having trouble connecting to the server. Please try again."
       }]);
     } finally {
       setIsTyping(false);
@@ -251,7 +271,9 @@ const ChatWindow = ({ onClose }) => {
         </div>
         <div className="medagent-header-info">
           <div className="medagent-header-title">Mediblix MedAgent</div>
-          <div className="medagent-header-subtitle">Your AI Pharmacy Assistant</div>
+          <div className="medagent-header-subtitle">
+            Your AI Pharmacy Assistant{aiLabel ? ` · ${aiLabel}` : ''}
+          </div>
         </div>
         <div className="medagent-header-actions">
           <button className="medagent-header-btn" onClick={handleClose}>

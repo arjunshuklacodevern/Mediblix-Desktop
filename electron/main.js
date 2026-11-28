@@ -17,11 +17,25 @@ const {
   DEFAULT_PORT,
   startBackend: supervisorStartBackend,
   stopBackend: supervisorStopBackend,
-  resolveNodeBinary,
+  checkBackendHealth,
+  resolveNodeRuntime,
   isSpawnedByElectron,
   getBackendChild
 } = require('./backend-supervisor');
-const { getCanonicalDbPath, getInitialCredentialsPath } = require('../database/paths');
+// Packaged apps ship `database/` outside app.asar (it is an extra resource).
+const dbPaths = app.isPackaged
+  ? require(path.join(process.resourcesPath, 'database', 'paths.js'))
+  : require('../database/paths');
+const { getCanonicalDbPath, getInitialCredentialsPath } = dbPaths;
+const { createLocalAISupervisor } = require('./local-ai-supervisor');
+const { createAIControlServer } = require('./ai-control-server');
+const { getHardwareProfile } = require('./hardware-profile');
+const { resolveTier } = require('./ai-catalog');
+const {
+  parseCredentials,
+  shouldNotify,
+  archiveCredentialsFile
+} = require('./first-run-notice');
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 const IS_DEV = !app.isPackaged && !process.argv.includes('--production');
@@ -32,9 +46,11 @@ const ADMIN_DEV_URL    = 'http://localhost:5174';
 const DB_PATH = getCanonicalDbPath();
 
 let isQuitting = false;
+let localAI = null;
+let aiControl = null;
 
 // ─── Backend Process Management ─────────────────────────────────────────────
-async function startBackend() {
+async function startBackend(extraEnv = {}) {
   const backendScript = app.isPackaged
     ? path.join(process.resourcesPath, 'backend', 'index.js')
     : path.join(__dirname, '..', 'backend', 'index.js');
@@ -43,14 +59,18 @@ async function startBackend() {
     ? path.join(process.resourcesPath, 'backend')
     : path.join(__dirname, '..', 'backend');
 
-  const nodeBin = resolveNodeBinary(app.isPackaged ? process.resourcesPath : null);
+  // Packaged builds run the backend on Electron's embedded Node when no
+  // separate node binary is bundled, so no system Node.js is required.
+  const nodeRuntime = resolveNodeRuntime(app.isPackaged ? process.resourcesPath : null);
 
   return supervisorStartBackend({
-    port: DEFAULT_PORT,
+    port: Number(process.env.PORT) || DEFAULT_PORT,
     backendScript,
     backendCwd,
-    nodeBin,
-    isDev: IS_DEV
+    nodeBin: nodeRuntime.bin,
+    nodeEnv: nodeRuntime.env,
+    isDev: IS_DEV,
+    env: extraEnv
   });
 }
 
@@ -289,36 +309,84 @@ function setupIPC() {
   // Database path (for future SQLite integration)
   ipcMain.handle('db:get-path', () => DB_PATH);
 
+  // Local AI runtime health (read-only; no shell access is exposed)
+  ipcMain.handle('localai:status', async () => {
+    if (!localAI) return { available: false, reason: 'not-initialized' };
+    return localAI.status({ probeNow: true });
+  });
+
+  ipcMain.handle('localai:ensure', async (_event, kind = 'text') => {
+    if (!localAI) return { ok: false, reason: 'not-initialized' };
+    return localAI.ensureModel(kind === 'vision' ? 'vision' : 'text');
+  });
+
+  ipcMain.handle('localai:unload', async (_event, kind = 'vision') => {
+    if (!localAI) return { unloaded: false, reason: 'not-initialized' };
+    return localAI.unloadModel(kind === 'vision' ? 'vision' : 'text');
+  });
+
+  ipcMain.handle('localai:stop', async () => {
+    if (!localAI) return { stopped: false, reason: 'not-initialized' };
+    return localAI.stopAll();
+  });
+
   // Open external links
   ipcMain.on('shell:open-external', (event, url) => {
     shell.openExternal(url);
   });
 }
 
-function checkAndNotifyFirstRunCredentials() {
+let firstRunNoticeHandled = false;
+
+/**
+ * Shows the initial-administrator credentials exactly once, and only when the
+ * running backend process actually provisioned the superadmin.
+ *
+ * Ordinary launches, backend restarts, health polling and dialog dismissal can
+ * never replay it: the provisioning flag is per-backend-process, an in-memory
+ * guard covers the current app run, and the file is archived after display.
+ */
+async function notifyFirstRunCredentials() {
   try {
+    if (firstRunNoticeHandled) return;
+
+    const health = await checkBackendHealth(Number(process.env.PORT) || DEFAULT_PORT, null);
+    if (!health.isHealthy || !health.provisionedAdmin) return;
+
     const credPath = getInitialCredentialsPath();
-    if (fs.existsSync(credPath)) {
-      const content = fs.readFileSync(credPath, 'utf8');
-      const passMatch = content.match(/Password:\s*([^\r\n]+)/);
-      const emailMatch = content.match(/Email:\s*([^\r\n]+)/);
-      if (passMatch && emailMatch) {
-        dialog.showMessageBoxSync({
-          type: 'info',
-          title: 'Mediblix — Administrator Account',
-          message: 'Initial Administrator Account Generated',
-          detail: [
-            'A unique administrator account has been created for your installation:\n',
-            `Email:    ${emailMatch[1]}`,
-            `Password: ${passMatch[1]}\n`,
-            `These credentials are saved at:\n${credPath}\n`,
-            'Please log in to the Super Admin portal and update your password.'
-          ].join('\n'),
-          buttons: ['OK']
-        });
-      }
+    if (!fs.existsSync(credPath)) return;
+
+    const credentials = parseCredentials(fs.readFileSync(credPath, 'utf8'));
+    if (!shouldNotify({ provisionedAdmin: true, credentials, alreadyHandled: firstRunNoticeHandled })) {
+      return;
+    }
+
+    dialog.showMessageBoxSync({
+      type: 'info',
+      title: 'Mediblix — Administrator Account',
+      message: 'Initial Administrator Account Generated',
+      detail: [
+        'A unique administrator account has been created for your installation:\n',
+        `Email:    ${credentials.email}`,
+        `Password: ${credentials.password}\n`,
+        `These credentials are saved at:\n${credPath}\n`,
+        'Please log in to the Super Admin portal and update your password.'
+      ].join('\n'),
+      buttons: ['OK']
+    });
+
+    // Marked handled before archiving: a displayed dialog must never repeat,
+    // even if the archive step below fails.
+    firstRunNoticeHandled = true;
+
+    const archive = archiveCredentialsFile(credPath);
+    if (archive.archived) {
+      console.log('[Electron] First-run credentials archived:', archive.path);
+    } else {
+      console.warn('[Electron] Could not archive first-run credentials:', archive.error);
     }
   } catch (err) {
+    // The credentials file is left untouched, so they are not lost.
     console.error('[Electron] Credential notification error:', err.message);
   }
 }
@@ -329,8 +397,69 @@ app.whenReady().then(async () => {
   setupIPC();
 
   try {
-    await startBackend();
-    checkAndNotifyFirstRunCredentials();
+    // The local AI runtime is created before the backend, because the backend
+    // needs its control channel to load models on demand. Nothing here blocks
+    // the UI: no model is started until a feature actually needs one.
+    const catalog = require('./ai-model-catalog.json');
+    const hardware = getHardwareProfile({
+      requestedTier: process.env.MEDIBLIX_AI_TIER || null,
+      availableTiers: Object.keys(catalog.tiers || {}),
+    });
+    const activeTier = resolveTier(catalog, hardware.tier);
+
+    localAI = createLocalAISupervisor({
+      catalog,
+      appDataDir: app.getPath('userData'),
+      resourcesPath: app.isPackaged ? process.resourcesPath : null,
+      devRoot: app.isPackaged ? null : path.join(__dirname, '..'),
+      env: { ...process.env },
+      hardware,
+      tier: activeTier.id,
+    });
+
+    // One line of startup evidence that the packaged runtime and the models in
+    // user data are both visible, without spawning a model.
+    localAI
+      .status()
+      .then((aiStatus) => {
+        console.log(
+          `[Electron] Local AI: runtime=${
+            aiStatus.runtime.installed ? aiStatus.runtime.path : "MISSING"
+          } models=${aiStatus.modelDir} ready(chat=${aiStatus.ready.chat}, vision=${aiStatus.ready.vision}) tier=${aiStatus.tier?.id}`
+        );
+      })
+      .catch((error) => console.warn(`[Electron] Local AI status failed: ${error.message}`));
+
+    aiControl = createAIControlServer({ supervisor: localAI });
+    const control = await aiControl.listen();
+
+    console.log(
+      `[Electron] Hardware: ${hardware.cpuCount} cores, ${hardware.totalMemGb} GB RAM, ${hardware.platformKey} — AI tier "${activeTier.id}"`
+    );
+    for (const warning of hardware.warnings || []) {
+      console.warn(`[Electron] ${warning}`);
+    }
+
+    await startBackend({
+      MEDIBLIX_AI_CONTROL_URL: control.url,
+      MEDIBLIX_AI_CONTROL_TOKEN: control.token,
+      MEDIBLIX_MODEL_DIR: localAI.modelDir,
+      MEDIBLIX_MODEL_CATALOG: path.join(__dirname, 'ai-model-catalog.json'),
+      MEDIBLIX_AI_TIER: activeTier.id || '',
+      MEDIBLIX_AI_HARDWARE: JSON.stringify(hardware),
+    });
+
+    localAI
+      .status()
+      .then((status) => {
+        const ready = status.ready || {};
+        console.log(
+          `[Electron] Local AI models: chat=${Boolean(ready.chat)} document=${Boolean(ready.document)} vision=${Boolean(ready.vision)} setupRequired=${Boolean(status.setupRequired)}`
+        );
+      })
+      .catch((error) => console.warn('[Electron] Local AI status error:', error.message));
+
+    await notifyFirstRunCredentials();
 
     // Register 2:00 AM nightly sync task in Windows Task Scheduler
     try {
@@ -370,22 +499,66 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
+  if (localAI) {
+    try {
+      await localAI.stopAll();
+    } catch {}
+  }
+  if (aiControl) {
+    try {
+      await aiControl.close();
+    } catch {}
+  }
   await stopBackend();
   app.quit();
 });
 
 app.on('before-quit', async (e) => {
   if (isQuitting) return;
-  if (getBackendChild() && isSpawnedByElectron()) {
-    e.preventDefault();
-    isQuitting = true;
-    console.log('[Electron] before-quit: Waiting for graceful backend shutdown...');
-    await stopBackend();
-    app.quit();
+
+  const ownsBackend = Boolean(getBackendChild() && isSpawnedByElectron());
+  const ownsLocalAI = Boolean(
+    localAI && Object.values(localAI.getOwnership()).some((slot) => slot.startedByUs)
+  );
+
+  if (!ownsBackend && !ownsLocalAI) return;
+
+  e.preventDefault();
+  isQuitting = true;
+  console.log('[Electron] before-quit: releasing owned services...');
+
+  // Only stop the local AI runtimes this application started.
+  if (ownsLocalAI) {
+    try {
+      await localAI.stopAll();
+    } catch (error) {
+      console.warn('[Electron] Local AI shutdown error:', error.message);
+    }
   }
+
+  if (aiControl) {
+    try {
+      await aiControl.close();
+    } catch (error) {
+      console.warn('[Electron] Local AI control shutdown error:', error.message);
+    }
+  }
+
+  await stopBackend();
+  app.quit();
 });
 
 app.on('will-quit', async () => {
+  if (localAI) {
+    try {
+      await localAI.stopAll();
+    } catch {}
+  }
+  if (aiControl) {
+    try {
+      await aiControl.close();
+    } catch {}
+  }
   await stopBackend();
 });
 

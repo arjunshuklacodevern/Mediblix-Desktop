@@ -18,6 +18,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Database path (for future SQLite integration)
   getDbPath: () => ipcRenderer.invoke('db:get-path'),
 
+  // Local AI runtime (health/models only; never exposes a shell)
+  localAI: {
+    getStatus: () => ipcRenderer.invoke('localai:status'),
+    ensure: (kind = 'text') => ipcRenderer.invoke('localai:ensure', kind),
+    unload: (kind = 'vision') => ipcRenderer.invoke('localai:unload', kind),
+    stop: () => ipcRenderer.invoke('localai:stop'),
+  },
+
   // Open external links safely
   openExternal: (url) => ipcRenderer.send('shell:open-external', url),
 

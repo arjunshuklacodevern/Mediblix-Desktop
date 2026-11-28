@@ -1,5 +1,12 @@
 import repositories from "../../database/repositories/index.js";
 import { getTenantContext } from "../utils/tenantHelper.js";
+import aiProvider from "../services/aiProvider.js";
+import { isAIError, toAIError } from "../services/aiErrors.js";
+import {
+  validateAppGuidance,
+  validateIntent,
+  validateSymptomPayload,
+} from "../services/extractionValidator.js";
 import {
   SYSTEM_PROMPT,
   INTENT_CLASSIFIER_PROMPT,
@@ -11,64 +18,195 @@ import {
 
 const { getDatabase, productRepository } = repositories;
 
-// ─────────────────────────────────────────────────
-// Helper: Call Gemini API
-// ─────────────────────────────────────────────────
-const callGemini = async (prompt, systemPrompt = "") => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Gemini API Key is not configured");
-  }
+const OFFLINE_NOTE =
+  "Offline mode: this answer comes from a local model and is limited to medicines in your own inventory. A pharmacist must verify every suggestion.";
 
-  const parts = [];
-  if (systemPrompt) {
-    parts.push({ text: systemPrompt });
-  }
-  parts.push({ text: prompt });
+// ─────────────────────────────────────────────────
+// Medical safety: deterministic red-flag gate
+// Applied regardless of provider, before any medicine is suggested.
+// ─────────────────────────────────────────────────
+const EMERGENCY_PATTERNS = [
+  /\bchest pain\b/i,
+  /\bchest tight(ness)?\b/i,
+  /\bheart attack\b/i,
+  /\bcan'?t breathe\b/i,
+  /\bdifficulty breathing\b/i,
+  /\bshort(ness)? of breath\b/i,
+  /\bbreathless\b/i,
+  /\bunconscious\b/i,
+  /\bfaint(ing|ed)?\b/i,
+  /\bseizure\b/i,
+  /\bconvuls/i,
+  /\bstroke\b/i,
+  /\bparalys/i,
+  /\bsevere bleeding\b/i,
+  /\bbleeding (heavily|a lot)\b/i,
+  /\bsuicid/i,
+  /\boverdose\b/i,
+  /\bpoison(ing|ed)?\b/i,
+  /\b(10[4-9]|1[1-9]\d)\s*(°\s*)?f\b/i,
+  /\b(4[0-9])\s*(°\s*)?c\b/i,
+];
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts }],
-      }),
+function detectEmergency(message) {
+  return EMERGENCY_PATTERNS.some((pattern) => pattern.test(String(message || "")));
+}
+
+const EMERGENCY_REPLY = {
+  type: "medicine_suggestion",
+  condition: "Requires professional medical assessment",
+  severity: "severe",
+  doctorConsultRequired: true,
+  message:
+    "⚠️ These symptoms may require urgent medical attention. Do not suggest medicines for this — advise the customer to consult a doctor or go to the nearest hospital immediately.",
+  medicines: [],
+  alternatives: [],
+  generalAdvice:
+    "MedAgent does not provide medicine advice for potentially serious symptoms. Please direct the customer to a qualified medical professional.",
+  provider: "safety-gate",
+  offline: false,
+  emergency: true,
+};
+
+// ─────────────────────────────────────────────────
+// Deterministic intent classification (works with no AI at all)
+// ─────────────────────────────────────────────────
+const SYMPTOM_WORDS =
+  /\b(pain|ache|fever|cough|cold|headache|migraine|acidity|heartburn|gas|vomit|nausea|diarrh|constipat|rash|allerg|infection|symptom|sore throat|sneez|dizzy|weakness|fatigue|cramp|burn|injur|itch|swelling|dehydration)\b/i;
+const ALTERNATIVE_WORDS =
+  /\b(alternative|alternatives|substitute|instead of|in place of|replace|equivalent|same as)\b/i;
+const GUIDANCE_WORDS =
+  /\b(how (do|can|to)|where (is|do|can|find)|navigate|open|go to|which page|screen|tab|dashboard|inventory|billing|order|orders|customer|customers|supplier|suppliers|import|settings|calendar|bill|bills)\b/i;
+
+function classifyIntentOffline(message) {
+  const text = String(message || "");
+  if (ALTERNATIVE_WORDS.test(text)) return "alternative_request";
+  if (SYMPTOM_WORDS.test(text)) return "symptom_query";
+  if (GUIDANCE_WORDS.test(text)) return "app_guidance";
+  return "general_chat";
+}
+
+function extractMedicineNameOffline(message) {
+  const text = String(message || "").replace(/\s+/g, " ").trim();
+  const patterns = [
+    /(?:alternative|substitute|instead of|in place of|replace|equivalent)\s*(?:for|of|to)?\s+(.+)/i,
+    /(?:need|want|looking for|do you have|is there|give me)\s+(.+)/i,
+    /find\s+(?:an?\s+)?alternative\s+for\s+(.+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      return match[1]
+        .replace(/\b(available|in stock|please|now|medicine|tablet|tablets|capsule|syrup)\b/gi, " ")
+        .replace(/[?.!]+$/, "")
+        .replace(/\s+/g, " ")
+        .trim();
     }
-  );
-
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(data.error.message || "Gemini API error");
   }
 
-  let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("No response from AI");
-  }
-
-  return text;
-};
+  return text.replace(/[?.!]+$/, "").trim();
+}
 
 // ─────────────────────────────────────────────────
-// Helper: Parse JSON from Gemini response
+// Built-in app guide (no AI required)
 // ─────────────────────────────────────────────────
-const parseGeminiJSON = (text) => {
-  let cleaned = text.replace(/```json/gi, "").replace(/```/gi, "").trim();
+const APP_GUIDE_FALLBACKS = [
+  {
+    match: /\b(import|scan|ai import|invoice upload)\b/i,
+    message:
+      "Use AI Import to read a supplier invoice and bulk-add products. Extracted rows are shown for review before anything is saved.",
+    steps: [
+      "Open AI Import from the sidebar",
+      "Upload a PDF, JPG or PNG invoice (or record audio while online)",
+      "Review and edit the extracted items",
+      "Confirm the import to update stock",
+    ],
+    navigateTo: "/ai-import",
+    pageTitle: "AI Import",
+  },
+  {
+    match: /\b(bill|billing|sale|sell|invoice|customer bill)\b/i,
+    message:
+      "Billing is where you build a customer bill, add products to the cart and complete the sale.",
+    steps: [
+      "Open Billing and stay on the New Bill tab",
+      "Search a product and add it to the cart",
+      "Optionally enter the customer's mobile number",
+      "Review totals, choose a payment method and complete the sale",
+    ],
+    navigateTo: "/billing",
+    pageTitle: "Billing",
+  },
+  {
+    match: /\b(add|new|create)\b.*\b(product|medicine|item)\b/i,
+    message:
+      "You can add a product from the Inventory page or with the Add New Product quick action on the Dashboard.",
+    steps: [
+      "Go to Inventory",
+      "Choose Add Product",
+      "Enter name, SKU, category, quantity and price",
+      "Save the product",
+    ],
+    navigateTo: "/inventory",
+    pageTitle: "Inventory",
+  },
+  {
+    match: /\b(stock|inventory|low stock|expiry|expired)\b/i,
+    message:
+      "Inventory lists your full catalogue with stock status, and the Dashboard highlights low-stock items.",
+    steps: [
+      "Open Inventory to search or filter products",
+      "Use the Dashboard low-stock alerts to prioritise restocking",
+    ],
+    navigateTo: "/inventory",
+    pageTitle: "Inventory",
+  },
+  {
+    match: /\b(purchase order|order|supplier order|restock)\b/i,
+    message: "Purchase orders track supplier deliveries from Pending through to Delivered.",
+    steps: [
+      "Open Orders to see all purchase orders",
+      "Create a purchase order with supplier and items",
+      "Mark it In Transit, then Delivered to receive the stock",
+    ],
+    navigateTo: "/orders",
+    pageTitle: "Orders",
+  },
+  {
+    match: /\b(customer|patient|purchase history)\b/i,
+    message: "The Customers page stores contact details and each customer's purchase history.",
+    steps: ["Open Customers", "Search by name or mobile number", "Open a customer to view their history"],
+    navigateTo: "/customers",
+    pageTitle: "Customers",
+  },
+  {
+    match: /\b(supplier|distributor|vendor)\b/i,
+    message: "Suppliers keeps your distributor directory with contact details.",
+    steps: ["Open Suppliers", "Add or edit a supplier", "Link the supplier when creating a purchase order"],
+    navigateTo: "/suppliers",
+    pageTitle: "Suppliers",
+  },
+  {
+    match: /\b(setting|profile|account|password)\b/i,
+    message: "Settings holds account and shop preferences.",
+    steps: ["Open Settings", "Update your profile or shop details", "Save the changes"],
+    navigateTo: "/settings",
+    pageTitle: "Settings",
+  },
+];
 
-  const objStart = cleaned.indexOf("{");
-  const objEnd = cleaned.lastIndexOf("}");
-  const arrStart = cleaned.indexOf("[");
-  const arrEnd = cleaned.lastIndexOf("]");
-
-  if (objStart !== -1 && objEnd > objStart && (arrStart === -1 || objStart < arrStart)) {
-    cleaned = cleaned.substring(objStart, objEnd + 1);
-  } else if (arrStart !== -1 && arrEnd > arrStart) {
-    cleaned = cleaned.substring(arrStart, arrEnd + 1);
-  }
-
-  return JSON.parse(cleaned);
-};
+function findOfflineGuide(message) {
+  const text = String(message || "");
+  const match = APP_GUIDE_FALLBACKS.find((entry) => entry.match.test(text));
+  if (!match) return null;
+  return {
+    message: match.message,
+    steps: match.steps,
+    navigateTo: match.navigateTo,
+    pageTitle: match.pageTitle,
+  };
+}
 
 // ─────────────────────────────────────────────────
 // Helper: Cross-reference medicines with inventory
@@ -185,6 +323,21 @@ const findAlternativesInSqlite = (category, medicineNameToExclude, orgId, limit 
   return rows.map((r) => productRepository.findById(r.id));
 };
 
+function sendChatError(res, error) {
+  const aiError = isAIError(error) ? error : toAIError(error);
+  const statusCode =
+    Number.isInteger(aiError.statusCode) && aiError.statusCode >= 400 && aiError.statusCode < 600
+      ? aiError.statusCode
+      : 503;
+
+  res.status(statusCode).json({
+    type: "error",
+    code: aiError.code,
+    message: aiError.message,
+    provider: aiError.provider,
+  });
+}
+
 // ─────────────────────────────────────────────────
 // POST /api/medagent/chat — Main chat endpoint
 // ─────────────────────────────────────────────────
@@ -197,21 +350,41 @@ const handleChat = async (req, res) => {
 
   try {
     const orgId = await getTenantContext(req);
-    const orgInternalId = repositories.organizationRepository.findById(orgId)?.id;
     const db = getDatabase();
+    const status = await aiProvider.getStatus();
+    const online = status.capabilities.chat === "gemini";
 
-    // Step 1: Classify intent
-    const intentPrompt = INTENT_CLASSIFIER_PROMPT.replace("{MESSAGE}", message);
-    const intentRaw = await callGemini(intentPrompt);
-    const intent = intentRaw.trim().toLowerCase().replace(/[^a-z_]/g, "");
+    // ── Step 1: Intent ────────────────────────────────────────────
+    let intent = null;
+    if (online) {
+      try {
+        const classified = await aiProvider.generateText({
+          prompt: INTENT_CLASSIFIER_PROMPT.replace("{MESSAGE}", message),
+        });
+        intent = validateIntent(classified.text);
+      } catch {
+        // Fall through to the deterministic classifier.
+      }
+    }
+    if (!intent) intent = classifyIntentOffline(message);
 
-    // Step 2: Route based on intent
+    // Offline: a bare medicine name ("need Dolo 650") is an alternatives lookup.
+    if (!online && intent === "general_chat") {
+      const directHits = productRepository.search(message, orgId);
+      if (directHits.length > 0) intent = "alternative_request";
+    }
+
+    // ── Step 2: Route by intent ───────────────────────────────────
     if (intent === "symptom_query") {
+      if (detectEmergency(message)) {
+        return res.json(EMERGENCY_REPLY);
+      }
+
       const categoryRows = db
         .prepare(
           "SELECT DISTINCT category FROM products WHERE organization_id = ? AND category IS NOT NULL"
         )
-        .all(orgInternalId);
+        .all(repositories.organizationRepository.findById(orgId)?.id);
       const categories = categoryRows.map((r) => r.category);
       const categoryList = categories.length > 0 ? categories.join(", ") : "General medicines";
 
@@ -219,15 +392,29 @@ const handleChat = async (req, res) => {
         .replace("{CATEGORIES}", categoryList)
         .replace("{SYMPTOMS}", message);
 
-      const aiResponse = await callGemini(prompt, SYSTEM_PROMPT);
-      const parsed = parseGeminiJSON(aiResponse);
+      let parsed;
+      let provider;
+      try {
+        const generated = await aiProvider.generateTextJSON({
+          system: SYSTEM_PROMPT,
+          prompt,
+          numPredict: 900,
+          validate: validateSymptomPayload,
+        });
+        parsed = generated.data;
+        provider = generated.provider;
+      } catch (error) {
+        return sendChatError(res, error);
+      }
 
-      let medicines = [];
+      const offline = provider === "local";
+      let medicines = crossReferenceInventory(parsed.medicines, orgId);
       let alternatives = [];
 
-      if (parsed.medicines && parsed.medicines.length > 0) {
-        medicines = crossReferenceInventory(parsed.medicines, orgId);
-
+      if (offline) {
+        // A local model may name anything; only inventory-backed rows survive.
+        medicines = medicines.filter((med) => med.inventory.available);
+      } else {
         const outOfStock = medicines.filter(
           (m) => !m.inventory.available && m.inventory.stockStatus !== "Expired"
         );
@@ -253,23 +440,57 @@ const handleChat = async (req, res) => {
         }
       }
 
+      if (offline && medicines.length === 0) {
+        return res.json({
+          type: "medicine_suggestion",
+          condition: parsed.condition,
+          severity: parsed.severity,
+          doctorConsultRequired: true,
+          message:
+            "I could not safely match these symptoms to any medicine in your inventory while offline. Please advise the customer to consult a pharmacist or doctor.",
+          medicines: [],
+          alternatives: [],
+          generalAdvice: parsed.generalAdvice || "",
+          provider,
+          offline: true,
+        });
+      }
+
+      const baseMessage = parsed.doctorConsultRequired
+        ? "⚠️ These symptoms may require immediate medical attention. Please advise the customer to consult a doctor."
+        : `Based on the symptoms, this may be associated with ${parsed.condition}. Here are the recommended medicines:`;
+
       return res.json({
         type: "medicine_suggestion",
         condition: parsed.condition || "General symptoms",
         severity: parsed.severity || "mild",
         doctorConsultRequired: parsed.doctorConsultRequired || false,
-        message: parsed.doctorConsultRequired
-          ? "⚠️ These symptoms may require immediate medical attention. Please advise the customer to consult a doctor."
-          : `Based on the symptoms, this may be associated with ${parsed.condition}. Here are the recommended medicines:`,
+        message: offline ? `${baseMessage}\n\n${OFFLINE_NOTE}` : baseMessage,
         medicines,
         alternatives,
         generalAdvice: parsed.generalAdvice || "",
+        provider,
+        offline,
       });
     }
 
     if (intent === "alternative_request") {
-      const prompt = `From the following user message, extract the medicine name they are asking an alternative for. Return ONLY the medicine name, nothing else.\n\nUser message: "${message}"`;
-      const medicineName = (await callGemini(prompt)).trim();
+      let medicineName = null;
+
+      if (online) {
+        try {
+          const extracted = await aiProvider.generateText({
+            prompt: `From the following user message, extract the medicine name they are asking an alternative for. Return ONLY the medicine name, nothing else.\n\nUser message: "${message}"`,
+            numPredict: 40,
+          });
+          medicineName = extracted.text.trim().replace(/^["']|["']$/g, "").split("\n")[0];
+        } catch {
+          // Fall through to deterministic extraction.
+        }
+      }
+
+      if (!medicineName) medicineName = extractMedicineNameOffline(message);
+      if (!medicineName) medicineName = message;
 
       const matchedProducts = productRepository.search(medicineName, orgId);
       const product = matchedProducts[0] || null;
@@ -278,39 +499,45 @@ const handleChat = async (req, res) => {
       const alts = findAlternativesInSqlite(category, medicineName, orgId, 5);
 
       if (alts.length > 0) {
-        const altNames = alts
-          .map((a) => `${a.name} (${a.category}, Stock: ${a.quantity}, Price: ₹${a.price})`)
-          .join("\n");
-        const rankPrompt = ALTERNATIVE_PROMPT
-          .replace("{MEDICINE_NAME}", medicineName)
-          .replace("{AVAILABLE_MEDICINES}", altNames);
-
         let rankedAlts = alts;
-        try {
-          const rankResponse = await callGemini(rankPrompt, SYSTEM_PROMPT);
-          const ranking = parseGeminiJSON(rankResponse);
+        let provider = "sqlite";
 
-          if (Array.isArray(ranking) && ranking.length > 0) {
-            rankedAlts = ranking
-              .map((r) => {
-                const match = alts.find(
-                  (a) => a.name.toLowerCase() === r.name?.toLowerCase()
-                );
-                if (match) {
-                  return { ...match, suitabilityNote: r.suitabilityNote || "" };
-                }
-                return null;
-              })
-              .filter(Boolean);
+        if (online) {
+          const altNames = alts
+            .map((a) => `${a.name} (${a.category}, Stock: ${a.quantity}, Price: ₹${a.price})`)
+            .join("\n");
+          const rankPrompt = ALTERNATIVE_PROMPT
+            .replace("{MEDICINE_NAME}", medicineName)
+            .replace("{AVAILABLE_MEDICINES}", altNames);
 
-            const rankedNames = rankedAlts.map((r) => r.name.toLowerCase());
-            const unranked = alts.filter(
-              (a) => !rankedNames.includes(a.name.toLowerCase())
-            );
-            rankedAlts = [...rankedAlts, ...unranked];
+          try {
+            const ranking = await aiProvider.generateTextJSON({
+              system: SYSTEM_PROMPT,
+              prompt: rankPrompt,
+              numPredict: 500,
+            });
+
+            if (Array.isArray(ranking.data) && ranking.data.length > 0) {
+              rankedAlts = ranking.data
+                .map((r) => {
+                  const match = alts.find(
+                    (a) => a.name.toLowerCase() === String(r?.name || "").toLowerCase()
+                  );
+                  if (match) {
+                    return { ...match, suitabilityNote: r?.suitabilityNote || "" };
+                  }
+                  return null;
+                })
+                .filter(Boolean);
+
+              const rankedNames = rankedAlts.map((r) => r.name.toLowerCase());
+              const unranked = alts.filter((a) => !rankedNames.includes(a.name.toLowerCase()));
+              rankedAlts = [...rankedAlts, ...unranked];
+              provider = "gemini";
+            }
+          } catch {
+            // Fallback to unranked SQLite order.
           }
-        } catch {
-          // Fallback to default ranking
         }
 
         return res.json({
@@ -327,6 +554,8 @@ const handleChat = async (req, res) => {
             expiryDate: a.expiryDate,
             suitabilityNote: a.suitabilityNote || "",
           })),
+          provider,
+          offline: !online,
         });
       }
 
@@ -335,34 +564,61 @@ const handleChat = async (req, res) => {
         originalMedicine: medicineName,
         message: `No alternatives found for "${medicineName}" in your current inventory. You may want to create a purchase order to restock.`,
         alternatives: [],
+        provider: "sqlite",
+        offline: !online,
       });
     }
 
     if (intent === "app_guidance") {
-      const prompt = APP_GUIDE_KNOWLEDGE.replace("{QUESTION}", message);
-      const aiResponse = await callGemini(prompt);
-      const parsed = parseGeminiJSON(aiResponse);
+      try {
+        const generated = await aiProvider.generateTextJSON({
+          prompt: APP_GUIDE_KNOWLEDGE.replace("{QUESTION}", message),
+          numPredict: 600,
+          validate: validateAppGuidance,
+        });
 
-      return res.json({
-        type: "app_guidance",
-        message: parsed.message || "I can help you navigate the Mediblix app!",
-        steps: parsed.steps || null,
-        navigateTo: parsed.navigateTo || null,
-        pageTitle: parsed.pageTitle || null,
-      });
+        return res.json({
+          type: "app_guidance",
+          message: generated.data.message || "I can help you navigate the Mediblix app!",
+          steps: generated.data.steps || null,
+          navigateTo: generated.data.navigateTo || null,
+          pageTitle: generated.data.pageTitle || null,
+          provider: generated.provider,
+          offline: generated.provider === "local",
+        });
+      } catch (error) {
+        const fallback = findOfflineGuide(message);
+        if (fallback) {
+          return res.json({ type: "app_guidance", ...fallback, provider: "builtin", offline: true });
+        }
+        return sendChatError(res, error);
+      }
     }
 
     // General chat
-    const prompt = GENERAL_CHAT_PROMPT.replace("{MESSAGE}", message);
-    const aiResponse = await callGemini(prompt);
-    const parsed = parseGeminiJSON(aiResponse);
+    try {
+      const generated = await aiProvider.generateTextJSON({
+        prompt: GENERAL_CHAT_PROMPT.replace("{MESSAGE}", message),
+        numPredict: 200,
+      });
 
-    return res.json({
-      type: "general",
-      message:
-        parsed.message ||
-        "Hi! I'm MedAgent, your AI pharmacy assistant. I can help you find medicines for symptoms, suggest alternatives, or guide you through the Mediblix app. What would you like help with?",
-    });
+      return res.json({
+        type: "general",
+        message:
+          generated.data?.message ||
+          "Hi! I'm MedAgent, your AI pharmacy assistant. I can help you find medicines for symptoms, suggest alternatives, or guide you through the Mediblix app.",
+        provider: generated.provider,
+        offline: generated.provider === "local",
+      });
+    } catch {
+      return res.json({
+        type: "general",
+        message:
+          "AI assistance is unavailable right now (no Gemini connection and no local model). I can still help with inventory lookups: ask for an alternative to a medicine, or open Inventory to browse products directly.",
+        provider: "builtin",
+        offline: true,
+      });
+    }
   } catch (error) {
     console.error("MedAgent Error:", error.message);
     res.status(500).json({
@@ -374,7 +630,7 @@ const handleChat = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────
-// POST /api/medagent/alternatives — Direct alternatives lookup
+// POST /api/medagent/alternatives — Direct alternatives lookup (SQLite only)
 // ─────────────────────────────────────────────────
 const getAlternatives = async (req, res) => {
   const { medicineName, category } = req.body;
@@ -406,7 +662,7 @@ const getAlternatives = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────
-// GET /api/medagent/categories — List inventory categories
+// GET /api/medagent/categories — List inventory categories (SQLite only)
 // ─────────────────────────────────────────────────
 const getCategories = async (req, res) => {
   try {

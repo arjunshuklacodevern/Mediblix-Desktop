@@ -24,8 +24,14 @@
     "test:jwt": "node backend/tests/test_jwt_secret_persistence.js",
     "test:offline": "node backend/tests/test_offline_and_mongo_removal.js",
     "test:supervisor": "node electron/tests/test_backend_supervisor.js",
+    "test:firstrun": "node electron/tests/test_first_run_notice.js && node backend/tests/test_first_run_provisioning.js",
+    "test:localai": "node electron/tests/test_local_ai_supervisor.js",
+    "test:hardware": "node electron/tests/test_hardware_profile.js",
+    "test:liveai": "node backend/tests/test_local_ai_live.js",
+    "test:aiint": "node electron/tests/test_local_ai_integration.js",
+    "test:ai": "node backend/tests/test_ai_online_offline.js",
     "test:sync": "node electron/tests/test_device_auth.js && node electron/tests/test_bidirectional_sync.js && node electron/tests/test_scheduler.js",
-    "test": "npm run test:db && npm run test:jwt && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin && npm run test:offline && npm run test:supervisor && npm run test:sync",
+    "test": "npm run test:db && npm run test:jwt && npm run test:api && npm run test:pos && npm run test:orders && npm run test:admin && npm run test:offline && npm run test:supervisor && npm run test:sync && npm run test:firstrun && npm run test:localai && npm run test:hardware && npm run test:aiint && npm run test:ai",
     "pack": "npm run build:all && electron-builder --dir",
     "dist": "npm run build:all && electron-builder",
     "postinstall": "electron-builder install-app-deps"
@@ -61,6 +67,22 @@
       {
         "from": "build/bin/node.exe",
         "to": "bin/node.exe"
+      },
+      {
+        "from": "electron/ai-catalog.js",
+        "to": "electron/ai-catalog.js"
+      },
+      {
+        "from": "electron/ai-model-catalog.json",
+        "to": "electron/ai-model-catalog.json"
+      },
+      {
+        "from": "build/runtime",
+        "to": "runtime",
+        "filter": [
+          "**/*",
+          "!_downloads/**"
+        ]
       },
       {
         "from": "electron/sync",
